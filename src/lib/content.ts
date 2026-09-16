@@ -65,11 +65,27 @@ export const groupClinics = {
   ] satisfies Clinic[],
 };
 
-// TODO: confirm per-season details (ages, schedule, pricing) for Junior Programs.
 export const juniorPrograms = {
-  fall: { season: "Fall", status: "details-pending" as const },
-  winter: { season: "Winter", status: "details-pending" as const },
-  spring: { season: "Spring", status: "details-pending" as const },
+  weeks: 6,
+  hoursPerSession: 2,
+  frequency: "Once a week",
+  price: 480,
+  priceNote: "+ tax per person",
+  maxPerGroup: 10,
+  multipleNightsNote:
+    "Depending on demand, sessions may run on multiple nights per week.",
+  curriculum: [
+    "Proper golf swing technique",
+    "Strength & mobility through multisport training methods",
+    "Engaging games and challenges",
+    "Training with world-class TrackMan technology",
+  ],
+  // TODO: confirm exact weekly day/time and age range per season.
+  seasons: [
+    { season: "Fall", venue: "summer" as const },
+    { season: "Winter", venue: "winter" as const },
+    { season: "Spring", venue: "summer" as const },
+  ],
 };
 
 export const bio = {

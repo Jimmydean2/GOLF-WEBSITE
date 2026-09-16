@@ -6,6 +6,7 @@ import {
   business,
   groupClinics,
   individualLessons,
+  juniorPrograms,
   locations,
 } from "@/lib/content";
 
@@ -112,8 +113,8 @@ export default function Home() {
             />
             <ProgramCard
               title="Junior Programs"
-              description="Fall, winter, and spring programs for young golfers."
-              price="Details coming soon"
+              description={`${juniorPrograms.weeks}-week Fall, Winter & Spring programs — swing technique, athletic training, and TrackMan.`}
+              price={`$${juniorPrograms.price} ${juniorPrograms.priceNote}`}
               href="/junior-programs"
             />
           </div>
