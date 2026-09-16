@@ -26,15 +26,17 @@ export default function Navbar() {
         </Link>
 
         <nav className="hidden lg:flex lg:items-center lg:gap-6">
-          {nav.map((item) => (
-            <Link
-              key={item.href}
-              href={item.href}
-              className="text-sm font-medium text-ink-soft transition-colors hover:text-forest"
-            >
-              {item.label}
-            </Link>
-          ))}
+          {nav
+            .filter((item) => item.href !== "/book")
+            .map((item) => (
+              <Link
+                key={item.href}
+                href={item.href}
+                className="text-sm font-medium text-ink-soft transition-colors hover:text-forest"
+              >
+                {item.label}
+              </Link>
+            ))}
           <Link
             href="/book"
             className="rounded-full bg-forest px-5 py-2.5 text-sm font-semibold text-cream transition-colors hover:bg-forest-dark"
