@@ -143,7 +143,7 @@ export default function Home() {
               mapsQuery={locations.summer.mapsQuery}
             />
             <LocationCard
-              image="/images/practice-green-closeup.jpg"
+              image="/images/royal-westcourt-lounge.jpg"
               season={locations.winter.label}
               name={locations.winter.name}
               address={locations.winter.address}
