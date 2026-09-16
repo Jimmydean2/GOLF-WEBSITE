@@ -1,17 +1,12 @@
-"use client";
-
 import Image from "next/image";
 import Link from "next/link";
-import { useState } from "react";
 import { business, primaryNav } from "@/lib/content";
 
 export default function Navbar() {
-  const [open, setOpen] = useState(false);
-
   return (
     <header className="sticky top-0 z-50 border-b border-gold/30 bg-cream/95 backdrop-blur supports-[backdrop-filter]:bg-cream/80">
-      <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-3 sm:px-6">
-        <Link href="/" className="flex items-center gap-3" onClick={() => setOpen(false)}>
+      <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-x-4 gap-y-3 px-4 py-3 sm:px-6">
+        <Link href="/" className="flex items-center gap-3">
           <Image
             src="/images/jimmy-dean-golf-logo.webp"
             alt={`${business.name} logo`}
@@ -25,7 +20,7 @@ export default function Navbar() {
           </span>
         </Link>
 
-        <nav className="hidden lg:flex lg:items-center lg:gap-6">
+        <nav className="flex flex-wrap items-center gap-x-6 gap-y-2">
           {primaryNav.map((item) => (
             <Link
               key={item.href}
@@ -42,52 +37,7 @@ export default function Navbar() {
             Book a Lesson
           </Link>
         </nav>
-
-        <button
-          type="button"
-          className="inline-flex h-11 w-11 items-center justify-center rounded-md text-forest lg:hidden"
-          aria-expanded={open}
-          aria-controls="mobile-menu"
-          aria-label={open ? "Close menu" : "Open menu"}
-          onClick={() => setOpen((v) => !v)}
-        >
-          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-            {open ? (
-              <path
-                d="M6 6l12 12M18 6L6 18"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-              />
-            ) : (
-              <path
-                d="M4 7h16M4 12h16M4 17h16"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-              />
-            )}
-          </svg>
-        </button>
       </div>
-
-      {open && (
-        <nav id="mobile-menu" className="border-t border-gold/30 bg-cream lg:hidden">
-          <ul className="flex flex-col px-4 py-2 sm:px-6">
-            {[...primaryNav, { label: "Book a Lesson", href: "/book" }].map((item) => (
-              <li key={item.href}>
-                <Link
-                  href={item.href}
-                  className="block py-3 text-base font-medium text-ink-soft hover:text-forest"
-                  onClick={() => setOpen(false)}
-                >
-                  {item.label}
-                </Link>
-              </li>
-            ))}
-          </ul>
-        </nav>
-      )}
     </header>
   );
 }
