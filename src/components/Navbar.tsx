@@ -3,7 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useState } from "react";
-import { business, nav } from "@/lib/content";
+import { business, primaryNav } from "@/lib/content";
 
 export default function Navbar() {
   const [open, setOpen] = useState(false);
@@ -26,17 +26,15 @@ export default function Navbar() {
         </Link>
 
         <nav className="hidden lg:flex lg:items-center lg:gap-6">
-          {nav
-            .filter((item) => item.href !== "/book")
-            .map((item) => (
-              <Link
-                key={item.href}
-                href={item.href}
-                className="text-sm font-medium text-ink-soft transition-colors hover:text-forest"
-              >
-                {item.label}
-              </Link>
-            ))}
+          {primaryNav.map((item) => (
+            <Link
+              key={item.href}
+              href={item.href}
+              className="text-sm font-medium text-ink-soft transition-colors hover:text-forest"
+            >
+              {item.label}
+            </Link>
+          ))}
           <Link
             href="/book"
             className="rounded-full bg-forest px-5 py-2.5 text-sm font-semibold text-cream transition-colors hover:bg-forest-dark"
@@ -76,7 +74,7 @@ export default function Navbar() {
       {open && (
         <nav id="mobile-menu" className="border-t border-gold/30 bg-cream lg:hidden">
           <ul className="flex flex-col px-4 py-2 sm:px-6">
-            {nav.map((item) => (
+            {[...primaryNav, { label: "Book a Lesson", href: "/book" }].map((item) => (
               <li key={item.href}>
                 <Link
                   href={item.href}

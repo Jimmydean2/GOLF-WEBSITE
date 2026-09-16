@@ -111,6 +111,16 @@ export const bio = {
   certifications: ["CPGA Certified Golf Professional"],
 };
 
+// Curated header/mobile-menu nav (per client request). "Book a Lesson" is
+// added separately as the CTA button in the header, and as a plain link in
+// the mobile menu.
+export const primaryNav = [
+  { label: "Golf Professional", href: "/about" },
+  { label: "Group Clinics", href: "/clinics" },
+  { label: "Junior Programs", href: "/junior-programs" },
+];
+
+// Full site map, used by the footer so every page stays reachable.
 export const nav = [
   { label: "Home", href: "/" },
   { label: "About", href: "/about" },
