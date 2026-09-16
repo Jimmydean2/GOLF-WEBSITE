@@ -1,0 +1,55 @@
+@import "tailwindcss";
+
+:root {
+  --color-cream: #fbf6ea;
+  --color-cream-dark: #f3ead4;
+  --color-forest: #1f4a34;
+  --color-forest-dark: #143324;
+  --color-gold: #c89b3c;
+  --color-gold-light: #e0bc6c;
+  --color-flag: #a63a2e;
+  --color-sky: #2f5d62;
+  --color-ink: #1b1b16;
+  --color-ink-soft: #4a463c;
+
+  --background: var(--color-cream);
+  --foreground: var(--color-ink);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+
+  --color-cream: var(--color-cream);
+  --color-cream-dark: var(--color-cream-dark);
+  --color-forest: var(--color-forest);
+  --color-forest-dark: var(--color-forest-dark);
+  --color-gold: var(--color-gold);
+  --color-gold-light: var(--color-gold-light);
+  --color-flag: var(--color-flag);
+  --color-sky: var(--color-sky);
+  --color-ink: var(--color-ink);
+  --color-ink-soft: var(--color-ink-soft);
+
+  --font-display: var(--font-playfair);
+  --font-sans: var(--font-inter);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
+}
+
+h1, h2, h3, h4, .font-display {
+  font-family: var(--font-display), Georgia, serif;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
