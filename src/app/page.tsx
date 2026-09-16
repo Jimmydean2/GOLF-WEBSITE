@@ -2,6 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 import Container from "@/components/Container";
 import CTAButton from "@/components/CTAButton";
+import HeroCarousel from "@/components/HeroCarousel";
 import {
   business,
   groupClinics,
@@ -15,16 +16,16 @@ export default function Home() {
     <div>
       {/* Hero */}
       <section className="relative isolate flex min-h-[85vh] items-end overflow-hidden bg-forest">
-        <Image
-          src="/images/jimmy-dean-tee-shot.jpg"
-          alt="Coach James mid-swing on the tee at Golf Dorval"
-          fill
-          priority
-          className="object-cover"
-          sizes="100vw"
+        <HeroCarousel
+          slides={[
+            { src: "/images/jimmy-dean-tee-shot.jpg", alt: "Coach James mid-swing on the tee at Golf Dorval" },
+            { src: "/images/junior-golf-lesson.jpg", alt: "Coach James coaching a junior golfer at the practice mats" },
+            { src: "/images/practice-green-wide.jpg", alt: "Practice green and range at Golf Dorval" },
+            { src: "/images/practice-green-closeup.jpg", alt: "Close-up of the practice green" },
+          ]}
         />
         <div
-          className="absolute inset-0 bg-gradient-to-t from-ink/80 via-ink/30 to-ink/10"
+          className="pointer-events-none absolute inset-0 z-10 bg-gradient-to-t from-ink/80 via-ink/30 to-ink/10"
           aria-hidden="true"
         />
         <Container className="relative z-10 pb-16 pt-32 sm:pb-24">
@@ -98,22 +99,22 @@ export default function Home() {
             </h2>
           </div>
 
-          <div className="mt-12 grid gap-8 md:grid-cols-3">
+          <div className="mt-12 grid gap-6 md:grid-cols-3">
             <ProgramCard
+              image="/images/jimmy-dean-tee-shot.jpg"
               title="Individual Lessons"
-              description={`One-on-one, ${individualLessons.duration} sessions tailored to your game.`}
               price={`From $${individualLessons.summer.single}`}
               href="/lessons"
             />
             <ProgramCard
+              image="/images/practice-green-wide.jpg"
               title="Group Clinics"
-              description={`${groupClinics.sessionsCount} sessions covering every part of your game, max ${groupClinics.maxParticipants} players.`}
               price={`$${groupClinics.pricePerPerson} for all ${groupClinics.sessionsCount}`}
               href="/clinics"
             />
             <ProgramCard
+              image="/images/junior-golf-lesson.jpg"
               title="Junior Programs"
-              description={`${juniorPrograms.weeks}-week Fall, Winter & Spring programs — swing technique, athletic training, and TrackMan.`}
               price={`$${juniorPrograms.price} ${juniorPrograms.priceNote}`}
               href="/junior-programs"
             />
@@ -172,27 +173,43 @@ export default function Home() {
 }
 
 function ProgramCard({
+  image,
   title,
-  description,
   price,
   href,
 }: {
+  image: string;
   title: string;
-  description: string;
   price: string;
   href: string;
 }) {
   return (
     <Link
       href={href}
-      className="group flex flex-col rounded-2xl border border-gold/30 bg-cream p-8 shadow-sm transition-shadow hover:shadow-md"
+      className="group relative isolate flex aspect-[3/4] flex-col justify-end overflow-hidden rounded-2xl shadow-sm transition-shadow hover:shadow-xl"
     >
-      <h3 className="font-display text-xl font-semibold text-forest">{title}</h3>
-      <p className="mt-3 flex-1 text-sm text-ink-soft">{description}</p>
-      <p className="mt-6 font-display text-lg font-semibold text-gold">{price}</p>
-      <span className="mt-2 text-sm font-semibold text-forest group-hover:underline">
-        Learn more &rarr;
-      </span>
+      <Image
+        src={image}
+        alt=""
+        fill
+        className="object-cover transition-transform duration-500 group-hover:scale-105"
+        sizes="(max-width: 768px) 100vw, 33vw"
+      />
+      <div
+        className="absolute inset-0 bg-gradient-to-t from-ink via-ink/40 to-transparent"
+        aria-hidden="true"
+      />
+      <div className="relative z-10 p-6">
+        <span className="inline-block rounded bg-gold px-3 py-1 font-display text-sm font-bold uppercase tracking-wide text-ink">
+          {price}
+        </span>
+        <h3 className="mt-4 font-display text-2xl font-bold uppercase leading-tight text-cream sm:text-3xl">
+          {title}
+        </h3>
+        <span className="mt-3 inline-block text-sm font-semibold text-cream/90 group-hover:underline">
+          Learn more &rarr;
+        </span>
+      </div>
     </Link>
   );
 }

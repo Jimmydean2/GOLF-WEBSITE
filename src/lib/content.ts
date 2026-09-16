@@ -7,7 +7,7 @@ export const business = {
   phone: "514-816-3454",
   phoneHref: "tel:+15148163454",
   email: "jamesdeanladeroute@gmail.com",
-  instagramUrl: "", // TODO: add Instagram handle/URL
+  instagramUrl: "https://www.instagram.com/jimmydeangolf",
   facebookUrl: "", // TODO: add Facebook page URL
 };
 
