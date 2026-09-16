@@ -3,13 +3,7 @@ import Link from "next/link";
 import Container from "@/components/Container";
 import CTAButton from "@/components/CTAButton";
 import HeroCarousel from "@/components/HeroCarousel";
-import {
-  business,
-  groupClinics,
-  individualLessons,
-  juniorPrograms,
-  locations,
-} from "@/lib/content";
+import { business, locations } from "@/lib/content";
 
 export default function Home() {
   return (
@@ -103,19 +97,16 @@ export default function Home() {
             <ProgramCard
               image="/images/jimmy-dean-tee-shot.jpg"
               title="Individual Lessons"
-              price={`From $${individualLessons.summer.single}`}
               href="/lessons"
             />
             <ProgramCard
               image="/images/practice-green-wide.jpg"
               title="Group Clinics"
-              price={`$${groupClinics.pricePerPerson} for all ${groupClinics.sessionsCount}`}
               href="/clinics"
             />
             <ProgramCard
               image="/images/junior-golf-lesson.jpg"
               title="Junior Programs"
-              price={`$${juniorPrograms.price} ${juniorPrograms.priceNote}`}
               href="/junior-programs"
             />
           </div>
@@ -175,12 +166,10 @@ export default function Home() {
 function ProgramCard({
   image,
   title,
-  price,
   href,
 }: {
   image: string;
   title: string;
-  price: string;
   href: string;
 }) {
   return (
@@ -200,10 +189,7 @@ function ProgramCard({
         aria-hidden="true"
       />
       <div className="relative z-10 p-6">
-        <span className="inline-block rounded bg-gold px-3 py-1 font-display text-sm font-bold uppercase tracking-wide text-ink">
-          {price}
-        </span>
-        <h3 className="mt-4 font-display text-2xl font-bold uppercase leading-tight text-cream sm:text-3xl">
+        <h3 className="font-display text-2xl font-bold uppercase leading-tight text-cream sm:text-3xl">
           {title}
         </h3>
         <span className="mt-3 inline-block text-sm font-semibold text-cream/90 group-hover:underline">
