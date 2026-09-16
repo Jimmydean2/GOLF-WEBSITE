@@ -82,9 +82,9 @@ export const juniorPrograms = {
   ],
   // TODO: confirm exact weekly day/time and age range per season.
   seasons: [
-    { season: "Fall", venue: "summer" as const },
+    { season: "Fall", venue: "winter" as const },
     { season: "Winter", venue: "winter" as const },
-    { season: "Spring", venue: "summer" as const },
+    { season: "Spring", venue: "winter" as const },
   ],
 };
 
