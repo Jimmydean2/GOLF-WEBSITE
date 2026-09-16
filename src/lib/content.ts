@@ -1,8 +1,8 @@
-// Single source of truth for Jimmy Dean Golf business content.
+// Single source of truth for James Dean Golf business content.
 // Fields marked TODO are placeholders pending real info from the client.
 
 export const business = {
-  name: "Jimmy Dean Golf",
+  name: "James Dean Golf",
   tagline: "Golf Lessons & Academy in Montreal",
   phone: "514-816-3454",
   phoneHref: "tel:+15148163454",

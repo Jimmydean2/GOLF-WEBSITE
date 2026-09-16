@@ -28,7 +28,7 @@ export default function BookPage() {
             <div className="overflow-hidden rounded-2xl border border-gold/30 shadow-sm">
               <iframe
                 src={googleAppointmentScheduleUrl}
-                title="Book a lesson with Jimmy Dean Golf"
+                title="Book a lesson with James Dean Golf"
                 className="h-[720px] w-full"
               />
             </div>
