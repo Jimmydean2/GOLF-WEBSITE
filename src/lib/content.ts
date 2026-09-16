@@ -107,7 +107,6 @@ export const bio = {
   otherAchievements: [
     "Quebec Bronze Gloves Boxing Champion",
     "National-level Go-Karting Competitor",
-    "Motocross racer with a passion for speed and precision",
   ],
   certifications: ["CPGA Certified Golf Professional"],
 };
