@@ -13,8 +13,8 @@ export default function JuniorProgramsPage() {
     <div>
       <section className="relative isolate flex min-h-[45vh] items-end overflow-hidden bg-forest">
         <Image
-          src="/images/junior-golf-lesson.jpg"
-          alt="Coach James coaching a junior golfer"
+          src="/images/junior-swing-guidance.jpg"
+          alt="Coach James guiding a junior golfer's swing"
           fill
           priority
           className="object-cover object-top"
