@@ -13,7 +13,7 @@ export default function Home() {
         <HeroCarousel
           slides={[
             { src: "/images/jimmy-dean-tee-shot.jpg", alt: "Coach James mid-swing on the tee at Golf Dorval" },
-            { src: "/images/junior-golf-lesson.jpg", alt: "Coach James coaching a junior golfer at the practice mats" },
+            { src: "/images/junior-swing-guidance.jpg", alt: "Coach James guiding a junior golfer's swing" },
             { src: "/images/practice-green-wide.jpg", alt: "Practice green and range at Golf Dorval" },
             { src: "/images/practice-green-closeup.jpg", alt: "Close-up of the practice green" },
           ]}
@@ -49,8 +49,8 @@ export default function Home() {
         <Container className="grid items-center gap-12 md:grid-cols-2">
           <div className="overflow-hidden rounded-2xl shadow-lg">
             <Image
-              src="/images/junior-golf-lesson.jpg"
-              alt="Coach James coaching a junior golfer at the practice mats"
+              src="/images/junior-swing-guidance.jpg"
+              alt="Coach James guiding a junior golfer's swing"
               width={1125}
               height={2000}
               className="h-full w-full object-cover"
@@ -105,7 +105,7 @@ export default function Home() {
               href="/clinics"
             />
             <ProgramCard
-              image="/images/junior-golf-lesson.jpg"
+              image="/images/junior-swing-guidance.jpg"
               title="Junior Programs"
               href="/junior-programs"
             />
