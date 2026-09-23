@@ -50,13 +50,27 @@ export type Clinic = {
   description: string;
 };
 
+export type ClinicCohortId = "may" | "august" | "september";
+
+export type ClinicCohort = {
+  id: ClinicCohortId;
+  month: string;
+};
+
 export const groupClinics = {
   maxParticipants: 10,
   sessionsCount: 4,
   sessionDuration: "90 minutes",
   pricePerPerson: 200,
-  months: ["May", "August", "September"],
   schedule: "Saturdays, 9:30 – 11:00 AM",
+  // Each cohort is its own 4-week series (max 10 people) covering all 4
+  // themed sessions below. Live spots-remaining per cohort come from
+  // /api/clinic-capacity (backed by a Google Sheet).
+  cohorts: [
+    { id: "may", month: "May" },
+    { id: "august", month: "August" },
+    { id: "september", month: "September" },
+  ] satisfies ClinicCohort[],
   clinics: [
     { number: 1, title: "Irons & Wedges", description: "Dial in contact and distance control with your irons and wedges." },
     { number: 2, title: "Short Game", description: "Chipping, pitching, and touch around the green." },
@@ -137,6 +151,7 @@ export const nav = [
 export const googleAppointmentScheduleUrl = "";
 
 // TODO: create a free Web3Forms access key at https://web3forms.com (just needs an email, no
-// account/password) and paste it here. This powers the Group Clinics sign-up and Contact forms,
-// emailing a notification to the address above whenever someone submits.
+// account/password) and paste it here. This powers the Contact page form, emailing a
+// notification to the address above whenever someone submits. (The Group Clinics sign-up form
+// uses the Google Sheets integration instead — see GOOGLE_SHEETS_SETUP.md.)
 export const web3FormsAccessKey = "";

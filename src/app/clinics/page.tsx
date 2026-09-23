@@ -34,7 +34,7 @@ export default function ClinicsPage() {
             complete tour through every part of your game.
           </p>
           <p className="mt-2 max-w-xl font-semibold text-gold-light">
-            {groupClinics.months.join(" · ")} &mdash; {groupClinics.schedule}
+            {groupClinics.cohorts.map((c) => c.month).join(" · ")} &mdash; {groupClinics.schedule}
           </p>
         </Container>
       </section>
@@ -68,7 +68,7 @@ export default function ClinicsPage() {
               {groupClinics.sessionDuration} per session
             </p>
             <p className="mt-1 text-sm text-cream/80">
-              Runs {groupClinics.months.join(", ")} &middot; {groupClinics.schedule}
+              Runs {groupClinics.cohorts.map((c) => c.month).join(", ")} &middot; {groupClinics.schedule}
             </p>
           </div>
         </Container>
