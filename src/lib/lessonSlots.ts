@@ -2,14 +2,17 @@
 // routes (server) and the booking calendar UI (client). No Node-only APIs.
 //
 // Availability: Monday-Friday, 9:00 AM - 4:00 PM, Montreal time.
-// Lessons are 50 minutes; slots start every 50 minutes so the last one
-// still finishes by 4:00 PM. Saturdays are the group clinic, handled
-// separately on /clinics.
+// Slots start every 50 minutes so the last one still finishes by 4:00 PM,
+// but each calendar event only blocks the first 40 of those minutes —
+// the trailing 10 is a buffer before the next slot, so back-to-back
+// bookings never run into each other. Saturdays are the group clinic,
+// handled separately on /clinics.
 
 import { utcToZonedParts, zonedTimeToUtc } from "./timezone";
 
 export const TIMEZONE = "America/Toronto";
-export const LESSON_MINUTES = 50;
+export const LESSON_MINUTES = 40;
+export const LESSON_BUFFER_MINUTES = 10;
 export const MIN_NOTICE_HOURS = 24;
 export const RECURRING_WEEK_OPTIONS = [2, 4, 6, 8, 12];
 

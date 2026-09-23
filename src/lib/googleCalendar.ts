@@ -1,6 +1,6 @@
 import { google, calendar_v3 } from "googleapis";
 import { getGoogleAuth, isGoogleServiceAccountConfigured } from "./googleAuth";
-import { TIMEZONE } from "./lessonSlots";
+import { LESSON_BUFFER_MINUTES, TIMEZONE } from "./lessonSlots";
 
 // Server-only. Reads/writes Coach James's personal Google Calendar via the
 // shared service account (see googleAuth.ts). The calendar must be shared
@@ -53,6 +53,7 @@ export async function createLessonEvent(params: {
     description: [
       `Phone: ${params.phone}`,
       `Email: ${params.email}`,
+      `${LESSON_BUFFER_MINUTES}-minute buffer after this lesson before the next booking.`,
       params.recurringWeeks ? `Recurring weekly for ${params.recurringWeeks} weeks.` : null,
     ]
       .filter(Boolean)
