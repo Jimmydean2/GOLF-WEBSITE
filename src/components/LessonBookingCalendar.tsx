@@ -2,7 +2,7 @@
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { business } from "@/lib/content";
-import { LESSON_BUFFER_MINUTES, LESSON_MINUTES, MIN_NOTICE_HOURS, RECURRING_WEEK_OPTIONS } from "@/lib/lessonSlots";
+import { LESSON_MINUTES, MIN_NOTICE_HOURS, RECURRING_WEEK_OPTIONS } from "@/lib/lessonSlots";
 
 type Slot = { start: string; label: string };
 type AvailabilityState = {
@@ -277,9 +277,7 @@ export default function LessonBookingCalendar() {
         <div className="sm:w-56">
           <p className="mb-3 text-sm font-medium text-ink">
             {selectedDate ? "Choose a time" : "Pick a day"}
-            <span className="ml-1 font-normal text-ink-soft">
-              ({LESSON_MINUTES}-minute lesson, {LESSON_BUFFER_MINUTES}-min buffer after)
-            </span>
+            <span className="ml-1 font-normal text-ink-soft">({LESSON_MINUTES}-minute lesson)</span>
           </p>
           <div className="flex flex-col gap-2">
             {slotsForSelectedDate.map((slot) => (

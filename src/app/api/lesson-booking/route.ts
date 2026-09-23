@@ -6,6 +6,7 @@ import {
   formatDateLongLabel,
   formatTimeLabel,
   isValidSlotStart,
+  LESSON_BUFFER_MINUTES,
   LESSON_MINUTES,
   MIN_NOTICE_HOURS,
   RECURRING_WEEK_OPTIONS,
@@ -61,12 +62,16 @@ export async function POST(request: Request) {
   }
 
   const end = new Date(start.getTime() + LESSON_MINUTES * 60_000);
+  const bufferMs = LESSON_BUFFER_MINUTES * 60_000;
 
   try {
-    const busy = await getBusyIntervals(start.toISOString(), end.toISOString());
+    // Query a bit before `start` too, so an existing lesson whose own
+    // buffer extends into this candidate is still caught.
+    const queryStart = new Date(start.getTime() - bufferMs);
+    const busy = await getBusyIntervals(queryStart.toISOString(), end.toISOString());
     const conflict = busy.some((b) => {
       const busyStart = new Date(b.start).getTime();
-      const busyEnd = new Date(b.end).getTime();
+      const busyEnd = new Date(b.end).getTime() + bufferMs;
       return start.getTime() < busyEnd && end.getTime() > busyStart;
     });
     if (conflict) {

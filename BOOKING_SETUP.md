@@ -32,12 +32,12 @@ minutes total, and it all lives inside your own Google account.
 
 ## Step 2: Connect your Google Calendar (lesson booking)
 
-This lets clients book a 40-minute lesson (Monday–Friday, 9:00 AM–4:00 PM,
+This lets clients book a 50-minute lesson (Monday–Friday, 9:00 AM–4:00 PM,
 at least 24 hours ahead), including booking a recurring weekly spot in one
 go, or browsing a couple months ahead — all blocked directly on your real
-calendar under the client's name. Bookable start times are still 50 minutes
-apart, so the last 10 minutes of each slot is automatically left open as a
-buffer before your next lesson.
+calendar under the client's name. Whatever time a lesson lands at, the
+booking page automatically leaves the next 10 minutes off-limits too, so
+there's always a breather before the next lesson can be booked.
 
 1. Go to [calendar.google.com](https://calendar.google.com) and open
    **Settings** (gear icon) for the calendar you want lessons booked into
