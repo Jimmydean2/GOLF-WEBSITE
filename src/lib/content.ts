@@ -145,11 +145,6 @@ export const nav = [
   { label: "Contact", href: "/contact" },
 ];
 
-// TODO: create a Google Calendar Appointment Schedule (calendar.google.com > + Create > Appointment schedule)
-// for 1:1 lesson bookings, then paste its public booking-page URL here. Google will handle
-// availability, auto-insert into your calendar, and email you whenever someone books.
-export const googleAppointmentScheduleUrl = "";
-
 // TODO: create a free Web3Forms access key at https://web3forms.com (just needs an email, no
 // account/password) and paste it here. This powers the Contact page form, emailing a
 // notification to the address above whenever someone submits. (The Group Clinics sign-up form

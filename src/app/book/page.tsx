@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Container from "@/components/Container";
-import { business, googleAppointmentScheduleUrl } from "@/lib/content";
+import LessonBookingCalendar from "@/components/LessonBookingCalendar";
+import { business } from "@/lib/content";
 
 export const metadata: Metadata = {
   title: `Book a Lesson | ${business.name}`,
@@ -18,43 +19,23 @@ export default function BookPage() {
             Book a Lesson
           </h1>
           <p className="mx-auto mt-4 max-w-xl text-ink-soft">
-            Pick a time that works for you &mdash; it&apos;s added straight
-            to Coach James&apos;s calendar and confirmed automatically.
+            Pick a day and time that works for you &mdash; book a single
+            lesson or a recurring weekly spot, added straight to Coach
+            James&apos;s calendar.
           </p>
         </div>
 
-        <div className="mx-auto mt-12 max-w-3xl">
-          {googleAppointmentScheduleUrl ? (
-            <div className="overflow-hidden rounded-2xl border border-gold/30 shadow-sm">
-              <iframe
-                src={googleAppointmentScheduleUrl}
-                title="Book a lesson with James Dean Golf"
-                className="h-[720px] w-full"
-              />
-            </div>
-          ) : (
-            <div className="rounded-2xl border border-gold/30 bg-cream-dark p-10 text-center">
-              <p className="font-display text-xl font-semibold text-forest">
-                Online booking is almost ready
-              </p>
-              <p className="mx-auto mt-3 max-w-md text-ink-soft">
-                In the meantime, reach out directly and we&apos;ll find a
-                time that works.
-              </p>
-              <div className="mt-6 flex flex-col items-center gap-2">
-                <a href={business.phoneHref} className="font-semibold text-forest hover:underline">
-                  {business.phone}
-                </a>
-                <a
-                  href={`mailto:${business.email}`}
-                  className="font-semibold text-forest hover:underline"
-                >
-                  {business.email}
-                </a>
-              </div>
-            </div>
-          )}
+        <div className="mx-auto mt-12 max-w-2xl">
+          <LessonBookingCalendar />
         </div>
+
+        <p className="mx-auto mt-6 max-w-xl text-center text-sm text-ink-soft">
+          Looking for the Saturday group clinic instead?{" "}
+          <a href="/clinics" className="font-semibold text-forest hover:underline">
+            See Group Clinics
+          </a>
+          .
+        </p>
       </Container>
     </div>
   );

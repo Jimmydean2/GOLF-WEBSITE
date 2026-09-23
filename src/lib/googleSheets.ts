@@ -1,12 +1,17 @@
 import { google } from "googleapis";
+import { getGoogleAuth, isGoogleServiceAccountConfigured } from "./googleAuth";
 
-// Server-only. Reads/writes the "ClinicSignups" tab of a Google Sheet via a
-// service account. See GOOGLE_SHEETS_SETUP.md for how to configure this.
+// Server-only. Reads/writes tabs of a Google Sheet via the shared service
+// account. This is the client "data bank" for both clinic sign-ups and
+// individual lesson bookings. See BOOKING_SETUP.md.
 //
-// Sheet header row (row 1): Timestamp | First Name | Last Name | Email | Phone | Cohort | Message
+// ClinicSignups tab header (row 1): Timestamp | First Name | Last Name | Email | Phone | Cohort | Message
+// LessonBookings tab header (row 1): Timestamp | First Name | Last Name | Email | Phone | Lesson Date | Lesson Time | Recurring
 
-const SHEET_TAB = "ClinicSignups";
-const SHEET_RANGE = `${SHEET_TAB}!A:G`;
+const CLINIC_SHEET_TAB = "ClinicSignups";
+const CLINIC_SHEET_RANGE = `${CLINIC_SHEET_TAB}!A:G`;
+const LESSON_SHEET_TAB = "LessonBookings";
+const LESSON_SHEET_RANGE = `${LESSON_SHEET_TAB}!A:H`;
 
 export type ClinicSignupRow = {
   timestamp: string;
@@ -18,29 +23,23 @@ export type ClinicSignupRow = {
   message: string;
 };
 
+export type LessonBookingRow = {
+  timestamp: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  phone: string;
+  lessonDate: string;
+  lessonTime: string;
+  recurring: string;
+};
+
 export function isGoogleSheetsConfigured(): boolean {
-  return Boolean(
-    process.env.GOOGLE_SHEETS_CLIENT_EMAIL &&
-      process.env.GOOGLE_SHEETS_PRIVATE_KEY &&
-      process.env.GOOGLE_SHEETS_SHEET_ID
-  );
+  return isGoogleServiceAccountConfigured() && Boolean(process.env.GOOGLE_SHEETS_SHEET_ID);
 }
 
 function getSheetsClient() {
-  const clientEmail = process.env.GOOGLE_SHEETS_CLIENT_EMAIL;
-  const privateKey = process.env.GOOGLE_SHEETS_PRIVATE_KEY?.replace(/\\n/g, "\n");
-
-  if (!clientEmail || !privateKey) {
-    throw new Error("Google Sheets credentials are not configured.");
-  }
-
-  const auth = new google.auth.JWT({
-    email: clientEmail,
-    key: privateKey,
-    scopes: ["https://www.googleapis.com/auth/spreadsheets"],
-  });
-
-  return google.sheets({ version: "v4", auth });
+  return google.sheets({ version: "v4", auth: getGoogleAuth() });
 }
 
 export async function getClinicSignups(): Promise<ClinicSignupRow[]> {
@@ -49,7 +48,7 @@ export async function getClinicSignups(): Promise<ClinicSignupRow[]> {
 
   const { data } = await sheets.spreadsheets.values.get({
     spreadsheetId,
-    range: SHEET_RANGE,
+    range: CLINIC_SHEET_RANGE,
   });
 
   const rows = data.values ?? [];
@@ -71,7 +70,7 @@ export async function appendClinicSignup(entry: Omit<ClinicSignupRow, "timestamp
 
   await sheets.spreadsheets.values.append({
     spreadsheetId,
-    range: SHEET_RANGE,
+    range: CLINIC_SHEET_RANGE,
     valueInputOption: "RAW",
     requestBody: {
       values: [
@@ -83,6 +82,31 @@ export async function appendClinicSignup(entry: Omit<ClinicSignupRow, "timestamp
           entry.phone,
           entry.cohort,
           entry.message,
+        ],
+      ],
+    },
+  });
+}
+
+export async function appendLessonBooking(entry: Omit<LessonBookingRow, "timestamp">): Promise<void> {
+  const sheets = getSheetsClient();
+  const spreadsheetId = process.env.GOOGLE_SHEETS_SHEET_ID!;
+
+  await sheets.spreadsheets.values.append({
+    spreadsheetId,
+    range: LESSON_SHEET_RANGE,
+    valueInputOption: "RAW",
+    requestBody: {
+      values: [
+        [
+          new Date().toISOString(),
+          entry.firstName,
+          entry.lastName,
+          entry.email,
+          entry.phone,
+          entry.lessonDate,
+          entry.lessonTime,
+          entry.recurring,
         ],
       ],
     },
