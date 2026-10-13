@@ -4,7 +4,8 @@ import { business, locations, nav } from "@/lib/content";
 
 export default function Footer() {
   return (
-    <footer className="border-t border-gold/30 bg-forest text-cream">
+    <footer className="relative bg-gradient-to-b from-forest via-forest-dark to-black text-cream">
+      <div className="gold-divider" aria-hidden="true" />
       <div className="mx-auto grid max-w-6xl gap-10 px-4 py-12 sm:px-6 md:grid-cols-3">
         <div>
           <div className="flex items-center gap-3">
@@ -13,7 +14,7 @@ export default function Footer() {
               alt={`${business.name} logo`}
               width={44}
               height={44}
-              className="h-11 w-11 rounded-full"
+              className="h-11 w-11 rounded-full ring-1 ring-gold-light/40"
             />
             <span className="font-display text-lg font-semibold">{business.name}</span>
           </div>
@@ -79,7 +80,7 @@ export default function Footer() {
           </ul>
         </div>
       </div>
-      <div className="border-t border-cream/10 py-4 text-center text-xs text-cream/60">
+      <div className="border-t border-gold/10 py-4 text-center text-xs text-cream/60">
         &copy; {new Date().getFullYear()} {business.name}. All rights reserved.
       </div>
     </footer>

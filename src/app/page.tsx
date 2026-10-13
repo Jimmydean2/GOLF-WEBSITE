@@ -23,21 +23,25 @@ export default function Home() {
           ]}
         />
         <div
-          className="pointer-events-none absolute inset-0 z-10 bg-gradient-to-t from-ink/80 via-ink/30 to-ink/10"
+          className="pointer-events-none absolute inset-0 z-10 bg-gradient-to-t from-black/85 via-black/35 to-black/5"
+          aria-hidden="true"
+        />
+        <div
+          className="pointer-events-none absolute inset-0 z-10 bg-gradient-to-t from-gold/25 via-gold/5 to-transparent mix-blend-overlay"
           aria-hidden="true"
         />
         <Container className="relative z-10 pb-16 pt-32 sm:pb-24">
-          <p className="font-display text-sm uppercase tracking-[0.3em] text-gold-light">
+          <p className="reveal-up font-display text-sm uppercase tracking-[0.3em] text-gold-light">
             Montreal, Quebec
           </p>
-          <h1 className="mt-4 max-w-2xl font-display text-4xl font-semibold text-cream sm:text-5xl md:text-6xl">
+          <h1 className="reveal-up gold-gradient-text gold-shimmer-in mt-4 max-w-2xl font-display text-4xl font-semibold sm:text-5xl md:text-6xl [animation-delay:120ms]">
             {business.name}
           </h1>
-          <p className="mt-4 max-w-xl text-lg text-cream/90">
+          <p className="reveal-up mt-4 max-w-xl text-lg text-cream/90 [animation-delay:240ms]">
             Private lessons, group clinics, and junior programs built around a
             simple idea: better fundamentals make golf more fun.
           </p>
-          <div className="mt-8 flex flex-wrap gap-4">
+          <div className="reveal-up mt-8 flex flex-wrap gap-4 [animation-delay:360ms]">
             <CTAButton href="/book" variant="secondary">
               Book a Lesson
             </CTAButton>
@@ -149,8 +153,9 @@ export default function Home() {
       </section>
 
       {/* Final CTA */}
-      <section className="bg-forest py-16 sm:py-20">
-        <Container className="flex flex-col items-center gap-6 text-center">
+      <section className="relative overflow-hidden bg-gradient-to-br from-forest via-forest-dark to-black py-16 sm:py-20">
+        <div className="gold-divider absolute inset-x-0 top-0" aria-hidden="true" />
+        <Container className="relative flex flex-col items-center gap-6 text-center">
           <h2 className="font-display text-3xl font-semibold text-cream sm:text-4xl">
             Ready to work on your game?
           </h2>
@@ -179,7 +184,7 @@ function ProgramCard({
   return (
     <Link
       href={href}
-      className="group relative isolate flex aspect-[3/4] flex-col justify-end overflow-hidden rounded-2xl shadow-sm transition-shadow hover:shadow-xl"
+      className="group relative isolate flex aspect-[3/4] flex-col justify-end overflow-hidden rounded-2xl shadow-sm ring-1 ring-gold/0 transition-all duration-500 hover:shadow-xl hover:shadow-black/30 hover:ring-gold/50"
     >
       <Image
         src={image}
@@ -189,7 +194,7 @@ function ProgramCard({
         sizes="(max-width: 768px) 100vw, 33vw"
       />
       <div
-        className="absolute inset-0 bg-gradient-to-t from-ink via-ink/40 to-transparent"
+        className="absolute inset-0 bg-gradient-to-t from-black via-black/40 to-transparent"
         aria-hidden="true"
       />
       <div className="relative z-10 p-6">

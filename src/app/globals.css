@@ -7,6 +7,7 @@
   --color-forest-dark: #143324;
   --color-gold: #c89b3c;
   --color-gold-light: #e0bc6c;
+  --color-gold-deep: #8a6423;
   --color-flag: #a63a2e;
   --color-sky: #2f5d62;
   --color-ink: #1b1b16;
@@ -26,6 +27,7 @@
   --color-forest-dark: var(--color-forest-dark);
   --color-gold: var(--color-gold);
   --color-gold-light: var(--color-gold-light);
+  --color-gold-deep: var(--color-gold-deep);
   --color-flag: var(--color-flag);
   --color-sky: var(--color-sky);
   --color-ink: var(--color-ink);
@@ -43,6 +45,73 @@ body {
 
 h1, h2, h3, h4, .font-display {
   font-family: var(--font-display), Georgia, serif;
+}
+
+::selection {
+  background: var(--color-gold);
+  color: var(--color-ink);
+}
+
+.gold-gradient-text {
+  background-image: linear-gradient(
+    110deg,
+    var(--color-gold-deep) 0%,
+    var(--color-gold-light) 30%,
+    var(--color-gold) 55%,
+    var(--color-gold-light) 80%,
+    var(--color-gold-deep) 100%
+  );
+  background-size: 250% auto;
+  background-position: 0% 50%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.gold-divider {
+  height: 1px;
+  background-image: linear-gradient(
+    90deg,
+    transparent,
+    var(--color-gold-light) 25%,
+    var(--color-gold) 50%,
+    var(--color-gold-light) 75%,
+    transparent
+  );
+}
+
+@keyframes gold-shimmer-sweep {
+  0% { background-position: 200% 50%; }
+  60% { background-position: -40% 50%; }
+  100% { background-position: -40% 50%; }
+}
+
+.gold-shimmer-in {
+  animation: gold-shimmer-sweep 2.4s cubic-bezier(0.22, 1, 0.36, 1) 0.4s both;
+}
+
+@keyframes reveal-up {
+  from {
+    opacity: 0;
+    transform: translateY(22px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.reveal-up {
+  animation: reveal-up 0.9s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes hero-zoom-in {
+  from { transform: scale(1.06); }
+  to { transform: scale(1); }
+}
+
+.hero-zoom-in {
+  animation: hero-zoom-in 1.6s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
 @media (prefers-reduced-motion: reduce) {

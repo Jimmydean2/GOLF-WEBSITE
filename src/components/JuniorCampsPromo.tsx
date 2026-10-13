@@ -44,7 +44,7 @@ export default function JuniorCampsPromo() {
       role="complementary"
       aria-label="2026 Junior Camps promotion"
     >
-      <div className="relative overflow-hidden rounded-2xl bg-forest shadow-xl">
+      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-forest via-forest to-forest-dark shadow-xl ring-1 ring-gold/30 shadow-black/40">
         <button
           type="button"
           onClick={() => setVisible(false)}
@@ -83,7 +83,7 @@ export default function JuniorCampsPromo() {
           <Link
             href="/junior-camps"
             onClick={() => setVisible(false)}
-            className="mt-4 inline-flex w-full items-center justify-center rounded-full border-2 border-cream px-4 py-2 text-xs font-semibold text-cream transition-colors hover:bg-cream hover:text-forest"
+            className="mt-4 inline-flex w-full items-center justify-center rounded-full border-2 border-gold-light/80 px-4 py-2 text-xs font-semibold text-cream transition-colors hover:border-gold-light hover:bg-gold-light hover:text-ink"
           >
             See Camp Dates
           </Link>

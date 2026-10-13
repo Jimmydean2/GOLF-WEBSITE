@@ -20,12 +20,13 @@ export default function ClinicsPage() {
           className="object-cover"
           sizes="100vw"
         />
-        <div className="absolute inset-0 bg-gradient-to-t from-ink/80 via-ink/30 to-ink/10" aria-hidden="true" />
+        <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/35 to-black/5" aria-hidden="true" />
+        <div className="absolute inset-0 bg-gradient-to-t from-gold/25 via-gold/5 to-transparent mix-blend-overlay" aria-hidden="true" />
         <Container className="relative z-10 pb-12 pt-24">
-          <p className="font-display text-sm uppercase tracking-[0.3em] text-gold-light">
+          <p className="reveal-up font-display text-sm uppercase tracking-[0.3em] text-gold-light">
             Small-Group Coaching
           </p>
-          <h1 className="mt-3 font-display text-4xl font-semibold text-cream sm:text-5xl">
+          <h1 className="reveal-up mt-3 font-display text-4xl font-semibold text-cream sm:text-5xl [animation-delay:120ms]">
             Group Clinics
           </h1>
           <p className="mt-4 max-w-xl text-cream/90">
@@ -58,7 +59,8 @@ export default function ClinicsPage() {
             ))}
           </div>
 
-          <div className="mt-10 rounded-2xl bg-forest px-8 py-6 text-center text-cream">
+          <div className="relative mt-10 overflow-hidden rounded-2xl bg-gradient-to-br from-forest via-forest-dark to-black px-8 py-6 text-center text-cream ring-1 ring-gold/20">
+            <div className="gold-divider absolute inset-x-0 top-0" aria-hidden="true" />
             <p className="font-display text-2xl font-semibold">
               ${groupClinics.pricePerPerson} per person for all{" "}
               {groupClinics.sessionsCount} clinics

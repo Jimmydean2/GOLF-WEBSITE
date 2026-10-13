@@ -20,12 +20,13 @@ export default function LessonsPage() {
           className="object-cover"
           sizes="100vw"
         />
-        <div className="absolute inset-0 bg-gradient-to-t from-ink/80 via-ink/30 to-ink/10" aria-hidden="true" />
+        <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/35 to-black/5" aria-hidden="true" />
+        <div className="absolute inset-0 bg-gradient-to-t from-gold/25 via-gold/5 to-transparent mix-blend-overlay" aria-hidden="true" />
         <Container className="relative z-10 pb-12 pt-24">
-          <p className="font-display text-sm uppercase tracking-[0.3em] text-gold-light">
+          <p className="reveal-up font-display text-sm uppercase tracking-[0.3em] text-gold-light">
             One-on-One Coaching
           </p>
-          <h1 className="mt-3 font-display text-4xl font-semibold text-cream sm:text-5xl">
+          <h1 className="reveal-up mt-3 font-display text-4xl font-semibold text-cream sm:text-5xl [animation-delay:120ms]">
             Individual Lessons
           </h1>
           <p className="mt-4 max-w-xl text-cream/90">
