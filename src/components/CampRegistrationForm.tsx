@@ -193,6 +193,7 @@ export default function CampRegistrationForm() {
         <p className="mt-1 text-sm text-ink-soft">
           {juniorCamps.hoursLabel} &mdash; {juniorCamps.hours}, at {locations[juniorCamps.venue].name}.
         </p>
+        <p className="text-sm text-ink-soft">{juniorCamps.scheduleNote}</p>
         <div className="mt-4 grid gap-3 sm:grid-cols-2">
           {juniorCamps.weeks.map((week) => {
             const info = capacity.weeks[week.id];

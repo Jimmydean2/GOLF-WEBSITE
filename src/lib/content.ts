@@ -126,6 +126,8 @@ export const juniorCamps = {
   maxPerWeek: 30,
   hours: "9:30 AM – 4:00 PM",
   hoursLabel: "Full Day Camps",
+  scheduleNote:
+    "Camps run Monday through Thursday. Friday is held in reserve as a makeup day in case of rain.",
   venue: "summer" as const,
   cancellationFee: 50,
   // Live spots-remaining per week come from /api/camp-capacity (backed by

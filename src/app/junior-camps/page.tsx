@@ -49,6 +49,9 @@ export default function JuniorCampsPage() {
               capped at {juniorCamps.maxPerWeek} kids so every camper gets real
               coaching time.
             </p>
+            <p className="mx-auto mt-2 max-w-xl text-sm font-semibold text-forest">
+              {juniorCamps.scheduleNote}
+            </p>
           </div>
 
           <div className="mt-10 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
