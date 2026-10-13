@@ -1,7 +1,10 @@
 "use client";
 
 import { FormEvent, useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { business, juniorCamps, locations, type CampWeekId } from "@/lib/content";
+
+const CAMP_WEEK_IDS = new Set(juniorCamps.weeks.map((week) => week.id));
 
 type Status = "idle" | "sending" | "success" | "error";
 
@@ -13,9 +16,10 @@ type CapacityState = {
 };
 
 export default function CampRegistrationForm() {
+  const searchParams = useSearchParams();
   const [status, setStatus] = useState<Status>("idle");
   const [errorMessage, setErrorMessage] = useState("");
-  const [selectedWeek, setSelectedWeek] = useState<CampWeekId | null>(null);
+  const [manualWeek, setManualWeek] = useState<CampWeekId | null>(null);
   const [codeOfConductAccepted, setCodeOfConductAccepted] = useState(false);
   const [consentAccepted, setConsentAccepted] = useState(false);
   const [capacity, setCapacity] = useState<CapacityState>({
@@ -46,6 +50,15 @@ export default function CampRegistrationForm() {
       cancelled = true;
     };
   }, []);
+
+  // A week picked via URL (from the overview tiles) pre-fills the picker
+  // until the shopper manually picks a different one.
+  const requestedWeek = searchParams.get("week");
+  const urlWeek =
+    requestedWeek && CAMP_WEEK_IDS.has(requestedWeek as CampWeekId) && !capacity.weeks[requestedWeek as CampWeekId]?.full
+      ? (requestedWeek as CampWeekId)
+      : null;
+  const selectedWeek = manualWeek ?? urlWeek;
 
   if (!capacity.loading && !capacity.configured) {
     return (
@@ -112,7 +125,7 @@ export default function CampRegistrationForm() {
       if (response.ok && result.success) {
         setStatus("success");
         form.reset();
-        setSelectedWeek(null);
+        setManualWeek(null);
         setCodeOfConductAccepted(false);
         setConsentAccepted(false);
       } else {
@@ -205,7 +218,7 @@ export default function CampRegistrationForm() {
                 key={week.id}
                 type="button"
                 disabled={full}
-                onClick={() => setSelectedWeek(week.id)}
+                onClick={() => setManualWeek(week.id)}
                 aria-pressed={selected}
                 className={`rounded-xl border-2 p-4 text-left transition-colors ${
                   full

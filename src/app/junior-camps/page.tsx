@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 import Image from "next/image";
+import Link from "next/link";
+import { Suspense } from "react";
 import Container from "@/components/Container";
 import CampRegistrationForm from "@/components/CampRegistrationForm";
 import { business, juniorCamps, locations } from "@/lib/content";
@@ -53,13 +55,24 @@ export default function JuniorCampsPage() {
             <p className="mx-auto mt-2 max-w-xl text-sm font-semibold text-forest">
               {juniorCamps.scheduleNote}
             </p>
+            <p className="mx-auto mt-2 max-w-xl text-sm text-ink-soft">
+              Tap a week to jump straight to registration.
+            </p>
           </div>
 
           <div className="mt-10 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {juniorCamps.weeks.map((week) => (
-              <div key={week.id} className="rounded-xl border border-gold/30 bg-cream-dark p-4 text-center">
+              <Link
+                key={week.id}
+                href={`/junior-camps?week=${week.id}#register`}
+                scroll={true}
+                className="group cursor-pointer rounded-xl border border-gold/30 bg-cream-dark p-4 text-center transition-all duration-300 hover:-translate-y-0.5 hover:border-gold hover:bg-white hover:shadow-md hover:shadow-black/10"
+              >
                 <p className="font-display font-semibold text-forest">{week.label}</p>
-              </div>
+                <span className="mt-1 inline-block text-xs font-semibold text-gold-deep opacity-0 transition-opacity group-hover:opacity-100">
+                  Register for this week &rarr;
+                </span>
+              </Link>
             ))}
           </div>
 
@@ -76,7 +89,7 @@ export default function JuniorCampsPage() {
         </Container>
       </section>
 
-      <section className="bg-cream-dark py-16 sm:py-24">
+      <section id="register" className="scroll-mt-28 bg-cream-dark py-16 sm:py-24">
         <Container className="max-w-2xl">
           <div className="text-center">
             <p className="font-display text-sm uppercase tracking-[0.3em] text-gold">
@@ -92,7 +105,9 @@ export default function JuniorCampsPage() {
           </div>
 
           <div className="mt-10">
-            <CampRegistrationForm />
+            <Suspense fallback={null}>
+              <CampRegistrationForm />
+            </Suspense>
           </div>
         </Container>
       </section>
