@@ -41,10 +41,10 @@ export default function AboutPage() {
 
           <div className="overflow-hidden rounded-2xl shadow-lg">
             <Image
-              src="/images/jimmy-dean-tee-shot.jpg"
-              alt="Coach James mid-swing on the course"
-              width={1336}
-              height={2000}
+              src="/images/coach-james-portrait.jpg"
+              alt="Coach James on the course at sunset"
+              width={1672}
+              height={941}
               className="h-full w-full object-cover"
             />
           </div>
