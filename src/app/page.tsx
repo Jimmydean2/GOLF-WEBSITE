@@ -18,7 +18,6 @@ export default function Home() {
               alt: "Coach James at the golf simulator bay at sunset",
             },
             { src: "/images/jimmy-dean-tee-shot.jpg", alt: "Coach James mid-swing on the tee at Golf Dorval" },
-            { src: "/images/junior-swing-guidance.jpg", alt: "Coach James guiding a junior golfer's swing" },
             { src: "/images/practice-green-wide.jpg", alt: "Practice green and range at Golf Dorval" },
             { src: "/images/practice-green-closeup.jpg", alt: "Close-up of the practice green" },
           ]}
