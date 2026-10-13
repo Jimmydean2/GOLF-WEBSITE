@@ -54,10 +54,10 @@ export default function Home() {
         <Container className="grid items-center gap-12 md:grid-cols-2">
           <div className="overflow-hidden rounded-2xl shadow-lg">
             <Image
-              src="/images/junior-swing-guidance.jpg"
-              alt="Coach James guiding a junior golfer's swing"
-              width={1125}
-              height={2000}
+              src="/images/coach-fundamentals-lesson.jpg"
+              alt="Coach James guiding a young golfer's setup at the driving range"
+              width={1290}
+              height={2293}
               className="h-full w-full object-cover"
             />
           </div>
