@@ -3,6 +3,7 @@ import { Playfair_Display, Inter } from "next/font/google";
 import "./globals.css";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
+import JuniorCampsPromo from "@/components/JuniorCampsPromo";
 import { business } from "@/lib/content";
 
 const playfair = Playfair_Display({
@@ -33,6 +34,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         <Navbar />
         <main className="flex-1">{children}</main>
         <Footer />
+        <JuniorCampsPromo />
       </body>
     </html>
   );

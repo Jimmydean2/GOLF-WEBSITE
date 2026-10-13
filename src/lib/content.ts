@@ -174,7 +174,6 @@ export const primaryNav = [
   { label: "Golf Professional", href: "/about" },
   { label: "Group Clinics", href: "/clinics" },
   { label: "Junior Programs", href: "/junior-programs" },
-  { label: "Junior Camps", href: "/junior-camps" },
 ];
 
 // Full site map, used by the footer so every page stays reachable.
