@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from "react";
 
 type Slide = { src: string; alt: string };
 
-const INTERVAL_MS = 5000;
+const INTERVAL_MS = 4000;
 
 export default function HeroCarousel({ slides }: { slides: Slide[] }) {
   const [index, setIndex] = useState(0);
