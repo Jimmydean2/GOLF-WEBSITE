@@ -1,6 +1,9 @@
+import { randomBytes, randomUUID } from "crypto";
 import { NextResponse } from "next/server";
-import { juniorCamps, type CampWeekId } from "@/lib/content";
+import { business, juniorCamps, type CampWeekId } from "@/lib/content";
 import { appendCampRegistration, getCampRegistrations, isGoogleSheetsConfigured } from "@/lib/googleSheets";
+import { isEmailConfigured, sendEmail } from "@/lib/email";
+import { buildCoachNotificationEmail } from "@/lib/campEmailTemplates";
 
 const VALID_WEEKS = juniorCamps.weeks.map((w) => w.id);
 
@@ -72,6 +75,9 @@ export async function POST(request: Request) {
       );
     }
 
+    const id = randomUUID();
+    const confirmToken = randomBytes(24).toString("hex");
+
     await appendCampRegistration({
       parentName,
       email,
@@ -87,7 +93,48 @@ export async function POST(request: Request) {
       week,
       codeOfConductAccepted: "Yes",
       consentAccepted: "Yes",
+      id,
+      confirmToken,
     });
+
+    if (isEmailConfigured()) {
+      try {
+        const confirmUrl = new URL("/api/camp-registration/confirm", request.url);
+        confirmUrl.searchParams.set("id", id);
+        confirmUrl.searchParams.set("token", confirmToken);
+
+        const { subject, html, text } = buildCoachNotificationEmail(
+          {
+            timestamp: "",
+            parentName,
+            email,
+            primaryPhone,
+            secondaryPhone,
+            childName,
+            dateOfBirth,
+            childAge,
+            healthInfo,
+            emergencyName,
+            emergencyRelationship,
+            emergencyPhone,
+            week,
+            codeOfConductAccepted: "Yes",
+            consentAccepted: "Yes",
+            id,
+            paid: "No",
+            paidAt: "",
+            confirmToken,
+          },
+          confirmUrl.toString()
+        );
+
+        await sendEmail({ to: business.email, subject, html, text });
+      } catch (err) {
+        // Don't fail the registration if the notification email can't send —
+        // it's already safely saved in the sheet either way.
+        console.error("Failed to send camp registration notification email:", err);
+      }
+    }
 
     return NextResponse.json({ success: true });
   } catch {

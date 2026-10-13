@@ -81,7 +81,10 @@ left" counter on the Junior Camps page.
    `Timestamp | First Name | Last Name | Email | Phone | Lesson Date | Lesson Time | Recurring`
 4. Add a third tab named exactly `CampRegistrations`. In row 1, add these
    exact column headers:
-   `Timestamp | Parent Name | Email | Primary Phone | Secondary Phone | Child Name | Date of Birth | Child Age | Health/Medical Info | Emergency Contact Name | Emergency Contact Relationship | Emergency Contact Phone | Week | Code of Conduct Accepted | Consent Accepted`
+   `Timestamp | Parent Name | Email | Primary Phone | Secondary Phone | Child Name | Date of Birth | Child Age | Health/Medical Info | Emergency Contact Name | Emergency Contact Relationship | Emergency Contact Phone | Week | Code of Conduct Accepted | Consent Accepted | Registration ID | Paid | Paid At | Confirm Token`
+   (The last four columns are filled in automatically by the site — you
+   don't need to touch them. "Paid" flips to `Yes` the moment you click
+   **Mark as Paid** in the notification email described in Step 4 below.)
 5. Click **Share** (top right) and share the sheet with the same
    `client_email` address from Step 1, giving it **Editor** access.
 6. Copy the spreadsheet's ID from its URL — it's the long string between
@@ -90,18 +93,45 @@ left" counter on the Junior Camps page.
 
 ---
 
-## Send me four things and I'll wire it all in
+## Step 4: Connect email for camp payment confirmations (~3 minutes)
+
+This is what makes camp registration "automatic": the moment a parent
+registers, you get an email with their details and a **Mark as Paid**
+button. You click it once you've received their e-transfer — that single
+click instantly emails the parent a full confirmation with their
+confirmed dates, drop-off/pick-up times, what to bring, and safety info.
+Nothing changes about how you actually get paid — parents still e-transfer
+you directly, no processing fees, no new payment account.
+
+This uses your own Gmail account to send the emails, via something called
+an "App Password" (a special password just for this website — it doesn't
+expose your real Gmail password, and you can revoke it anytime).
+
+1. Go to [myaccount.google.com/security](https://myaccount.google.com/security)
+   and make sure **2-Step Verification** is turned on for your Gmail
+   account (required for App Passwords — if it's already on, skip to step 2).
+2. Go to [myaccount.google.com/apppasswords](https://myaccount.google.com/apppasswords).
+3. Under "App name," type something like `James Dean Golf Website` and
+   click **Create**.
+4. Google shows you a 16-character password (four groups of four letters).
+   Copy it — you won't be able to see it again after closing this screen.
+
+---
+
+## Send me six things and I'll wire it all in
 
 - The `client_email` value from the JSON file (Step 1)
 - The `private_key` value from the JSON file (the whole thing, including
   the `-----BEGIN PRIVATE KEY-----` / `-----END PRIVATE KEY-----` lines)
 - The Calendar ID (Step 2)
 - The spreadsheet ID (Step 3)
+- Your Gmail address (Step 4)
+- The 16-character App Password (Step 4)
 
 These get set as private environment variables on the hosting side (never
 committed to the code), matching the names in `.env.local.example` in this
 repo: `GOOGLE_SERVICE_ACCOUNT_CLIENT_EMAIL`, `GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY`,
-`GOOGLE_CALENDAR_ID`, `GOOGLE_SHEETS_SHEET_ID`.
+`GOOGLE_CALENDAR_ID`, `GOOGLE_SHEETS_SHEET_ID`, `GMAIL_USER`, `GMAIL_APP_PASSWORD`.
 
 Once those are set:
 - The **Book a Lesson** page shows a real month calendar of your actual open
@@ -110,9 +140,15 @@ Once those are set:
 - The **Clinics** page automatically shows live spots-remaining per month
   and disables a cohort once it hits 10 sign-ups.
 - The **Junior Camps** page automatically shows live spots-remaining per
-  week and disables a week once it hits 30 registrations.
+  week and disables a week once it hits 30 registrations. Each week tile
+  on the page is clickable and jumps straight to the registration form
+  with that week pre-selected.
 - Every booking, sign-up, or registration appends a row to your sheet — no
   further setup needed.
+- Every camp registration also emails you a **Mark as Paid** link; clicking
+  it once the e-transfer is in automatically emails the parent their full
+  confirmation (dates, drop-off/pick-up times, what to bring, safety info).
+  Clicking it a second time is harmless — it won't send a duplicate email.
 
 ---
 

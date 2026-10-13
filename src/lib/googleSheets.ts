@@ -9,14 +9,15 @@ import { getGoogleAuth, isGoogleServiceAccountConfigured } from "./googleAuth";
 // LessonBookings tab header (row 1): Timestamp | First Name | Last Name | Email | Phone | Lesson Date | Lesson Time | Recurring
 // CampRegistrations tab header (row 1): Timestamp | Parent Name | Email | Primary Phone | Secondary Phone |
 //   Child Name | Date of Birth | Child Age | Health/Medical Info | Emergency Contact Name |
-//   Emergency Contact Relationship | Emergency Contact Phone | Week | Code of Conduct Accepted | Consent Accepted
+//   Emergency Contact Relationship | Emergency Contact Phone | Week | Code of Conduct Accepted |
+//   Consent Accepted | Registration ID | Paid | Paid At | Confirm Token
 
 const CLINIC_SHEET_TAB = "ClinicSignups";
 const CLINIC_SHEET_RANGE = `${CLINIC_SHEET_TAB}!A:G`;
 const LESSON_SHEET_TAB = "LessonBookings";
 const LESSON_SHEET_RANGE = `${LESSON_SHEET_TAB}!A:H`;
 const CAMP_SHEET_TAB = "CampRegistrations";
-const CAMP_SHEET_RANGE = `${CAMP_SHEET_TAB}!A:O`;
+const CAMP_SHEET_RANGE = `${CAMP_SHEET_TAB}!A:S`;
 
 export type ClinicSignupRow = {
   timestamp: string;
@@ -55,6 +56,10 @@ export type CampRegistrationRow = {
   week: string;
   codeOfConductAccepted: string;
   consentAccepted: string;
+  id: string;
+  paid: string;
+  paidAt: string;
+  confirmToken: string;
 };
 
 export function isGoogleSheetsConfigured(): boolean {
@@ -136,18 +141,8 @@ export async function appendLessonBooking(entry: Omit<LessonBookingRow, "timesta
   });
 }
 
-export async function getCampRegistrations(): Promise<CampRegistrationRow[]> {
-  const sheets = getSheetsClient();
-  const spreadsheetId = process.env.GOOGLE_SHEETS_SHEET_ID!;
-
-  const { data } = await sheets.spreadsheets.values.get({
-    spreadsheetId,
-    range: CAMP_SHEET_RANGE,
-  });
-
-  const rows = data.values ?? [];
-  // Skip the header row.
-  return rows.slice(1).map((row) => ({
+function mapCampRow(row: string[]): CampRegistrationRow {
+  return {
     timestamp: row[0] ?? "",
     parentName: row[1] ?? "",
     email: row[2] ?? "",
@@ -163,10 +158,30 @@ export async function getCampRegistrations(): Promise<CampRegistrationRow[]> {
     week: row[12] ?? "",
     codeOfConductAccepted: row[13] ?? "",
     consentAccepted: row[14] ?? "",
-  }));
+    id: row[15] ?? "",
+    paid: row[16] ?? "",
+    paidAt: row[17] ?? "",
+    confirmToken: row[18] ?? "",
+  };
 }
 
-export async function appendCampRegistration(entry: Omit<CampRegistrationRow, "timestamp">): Promise<void> {
+export async function getCampRegistrations(): Promise<CampRegistrationRow[]> {
+  const sheets = getSheetsClient();
+  const spreadsheetId = process.env.GOOGLE_SHEETS_SHEET_ID!;
+
+  const { data } = await sheets.spreadsheets.values.get({
+    spreadsheetId,
+    range: CAMP_SHEET_RANGE,
+  });
+
+  const rows = data.values ?? [];
+  // Skip the header row.
+  return rows.slice(1).map(mapCampRow);
+}
+
+export async function appendCampRegistration(
+  entry: Omit<CampRegistrationRow, "timestamp" | "paid" | "paidAt">
+): Promise<void> {
   const sheets = getSheetsClient();
   const spreadsheetId = process.env.GOOGLE_SHEETS_SHEET_ID!;
 
@@ -192,8 +207,53 @@ export async function appendCampRegistration(entry: Omit<CampRegistrationRow, "t
           entry.week,
           entry.codeOfConductAccepted,
           entry.consentAccepted,
+          entry.id,
+          "No",
+          "",
+          entry.confirmToken,
         ],
       ],
     },
   });
+}
+
+// Looks up a registration by its ID + confirm token (from the "Mark as
+// Paid" link in the coach's notification email), and — unless it's already
+// been marked paid — writes "Yes" + a timestamp into the Paid/Paid At
+// columns. Returns null if the id/token pair doesn't match any row (an
+// invalid or tampered link).
+export async function markCampRegistrationPaid(
+  id: string,
+  token: string
+): Promise<{ row: CampRegistrationRow; alreadyPaid: boolean } | null> {
+  const sheets = getSheetsClient();
+  const spreadsheetId = process.env.GOOGLE_SHEETS_SHEET_ID!;
+
+  const { data } = await sheets.spreadsheets.values.get({
+    spreadsheetId,
+    range: CAMP_SHEET_RANGE,
+  });
+
+  const rows = data.values ?? [];
+  const dataRows = rows.slice(1);
+  const index = dataRows.findIndex((row) => row[15] === id && row[18] === token);
+  if (index === -1) return null;
+
+  const row = dataRows[index];
+  if (row[16] === "Yes") {
+    return { row: mapCampRow(row), alreadyPaid: true };
+  }
+
+  const sheetRowNumber = index + 2; // +1 for the header row, +1 to convert to 1-indexed
+  const paidAt = new Date().toISOString();
+  await sheets.spreadsheets.values.update({
+    spreadsheetId,
+    range: `${CAMP_SHEET_TAB}!Q${sheetRowNumber}:R${sheetRowNumber}`,
+    valueInputOption: "RAW",
+    requestBody: { values: [["Yes", paidAt]] },
+  });
+
+  row[16] = "Yes";
+  row[17] = paidAt;
+  return { row: mapCampRow(row), alreadyPaid: false };
 }

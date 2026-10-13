@@ -130,6 +130,22 @@ export const juniorCamps = {
     "Camps run Monday through Thursday. Friday is held in reserve as a makeup day in case of rain.",
   venue: "summer" as const,
   cancellationFee: 50,
+  dropOffTime: "9:15 – 9:30 AM",
+  pickUpTime: "4:00 – 4:15 PM",
+  whatToBring: [
+    "Sunscreen, applied before drop-off (a travel-size bottle for reapplication is a good idea)",
+    "A refillable water bottle",
+    "A packed lunch and snacks for the day",
+    "A little spending money for the snack shop",
+    "Comfortable athletic wear, golf or running shoes, and a hat or cap",
+  ],
+  safetyInfo: [
+    "A CPGA-certified coach and on-site staff supervise all campers throughout the day.",
+    "Regular sun-safety and water breaks are built into the daily schedule.",
+    "Please make sure any allergies or medical conditions are noted on the registration form.",
+    "Campers may only be picked up by a parent/guardian or someone they've authorized in advance.",
+    "Camps run rain or shine Monday–Thursday; Friday is held in reserve as a weather makeup day.",
+  ],
   // Live spots-remaining per week come from /api/camp-capacity (backed by
   // the same Google Sheet as clinic sign-ups, on a separate tab).
   weeks: [
