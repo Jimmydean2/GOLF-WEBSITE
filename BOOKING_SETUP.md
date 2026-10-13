@@ -63,12 +63,13 @@ edit or delete just that occurrence — the rest of the series is unaffected.
 
 ---
 
-## Step 3: Connect your Google Sheet (clinic sign-ups + full client list)
+## Step 3: Connect your Google Sheet (sign-ups + full client list)
 
-This is your client "data bank" — every clinic sign-up and every lesson
-booking gets logged here as its own row, so **you can open it any time** to
-see everyone's name, phone, and email. It also powers the live "X of 10
-spots left" counter on the Clinics page.
+This is your client "data bank" — every clinic sign-up, lesson booking, and
+camp registration gets logged here as its own row, so **you can open it any
+time** to see everyone's name, phone, and email. It also powers the live
+"X of 10 spots left" counter on the Clinics page and the "X of 30 spots
+left" counter on the Junior Camps page.
 
 1. Go to [sheets.google.com](https://sheets.google.com) and create a new
    blank spreadsheet, named e.g. "James Dean Golf — Bookings".
@@ -78,9 +79,12 @@ spots left" counter on the Clinics page.
 3. Add a second tab (the `+` at the bottom) named exactly `LessonBookings`.
    In row 1, add these exact column headers:
    `Timestamp | First Name | Last Name | Email | Phone | Lesson Date | Lesson Time | Recurring`
-4. Click **Share** (top right) and share the sheet with the same
+4. Add a third tab named exactly `CampRegistrations`. In row 1, add these
+   exact column headers:
+   `Timestamp | Parent Name | Email | Primary Phone | Secondary Phone | Child Name | Date of Birth | Child Age | Health/Medical Info | Emergency Contact Name | Emergency Contact Relationship | Emergency Contact Phone | Week | Code of Conduct Accepted | Consent Accepted`
+5. Click **Share** (top right) and share the sheet with the same
    `client_email` address from Step 1, giving it **Editor** access.
-5. Copy the spreadsheet's ID from its URL — it's the long string between
+6. Copy the spreadsheet's ID from its URL — it's the long string between
    `/d/` and `/edit`, e.g.
    `docs.google.com/spreadsheets/d/`**`1AbC-xyz123...`**`/edit`.
 
@@ -105,8 +109,10 @@ Once those are set:
   the time on your calendar automatically.
 - The **Clinics** page automatically shows live spots-remaining per month
   and disables a cohort once it hits 10 sign-ups.
-- Every booking or sign-up appends a row to your sheet — no further setup
-  needed.
+- The **Junior Camps** page automatically shows live spots-remaining per
+  week and disables a week once it hits 30 registrations.
+- Every booking, sign-up, or registration appends a row to your sheet — no
+  further setup needed.
 
 ---
 

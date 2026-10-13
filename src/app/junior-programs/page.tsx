@@ -130,6 +130,13 @@ export default function JuniorProgramsPage() {
               programs open for registration?
             </p>
             <CTAButton href="/contact">Get in Touch</CTAButton>
+            <p className="text-sm text-ink-soft">
+              Looking for summer day camps instead?{" "}
+              <a href="/junior-camps" className="font-semibold text-forest hover:underline">
+                See Junior Camps
+              </a>
+              .
+            </p>
           </div>
         </Container>
       </section>

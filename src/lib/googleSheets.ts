@@ -7,11 +7,16 @@ import { getGoogleAuth, isGoogleServiceAccountConfigured } from "./googleAuth";
 //
 // ClinicSignups tab header (row 1): Timestamp | First Name | Last Name | Email | Phone | Cohort | Message
 // LessonBookings tab header (row 1): Timestamp | First Name | Last Name | Email | Phone | Lesson Date | Lesson Time | Recurring
+// CampRegistrations tab header (row 1): Timestamp | Parent Name | Email | Primary Phone | Secondary Phone |
+//   Child Name | Date of Birth | Child Age | Health/Medical Info | Emergency Contact Name |
+//   Emergency Contact Relationship | Emergency Contact Phone | Week | Code of Conduct Accepted | Consent Accepted
 
 const CLINIC_SHEET_TAB = "ClinicSignups";
 const CLINIC_SHEET_RANGE = `${CLINIC_SHEET_TAB}!A:G`;
 const LESSON_SHEET_TAB = "LessonBookings";
 const LESSON_SHEET_RANGE = `${LESSON_SHEET_TAB}!A:H`;
+const CAMP_SHEET_TAB = "CampRegistrations";
+const CAMP_SHEET_RANGE = `${CAMP_SHEET_TAB}!A:O`;
 
 export type ClinicSignupRow = {
   timestamp: string;
@@ -32,6 +37,24 @@ export type LessonBookingRow = {
   lessonDate: string;
   lessonTime: string;
   recurring: string;
+};
+
+export type CampRegistrationRow = {
+  timestamp: string;
+  parentName: string;
+  email: string;
+  primaryPhone: string;
+  secondaryPhone: string;
+  childName: string;
+  dateOfBirth: string;
+  childAge: string;
+  healthInfo: string;
+  emergencyName: string;
+  emergencyRelationship: string;
+  emergencyPhone: string;
+  week: string;
+  codeOfConductAccepted: string;
+  consentAccepted: string;
 };
 
 export function isGoogleSheetsConfigured(): boolean {
@@ -107,6 +130,68 @@ export async function appendLessonBooking(entry: Omit<LessonBookingRow, "timesta
           entry.lessonDate,
           entry.lessonTime,
           entry.recurring,
+        ],
+      ],
+    },
+  });
+}
+
+export async function getCampRegistrations(): Promise<CampRegistrationRow[]> {
+  const sheets = getSheetsClient();
+  const spreadsheetId = process.env.GOOGLE_SHEETS_SHEET_ID!;
+
+  const { data } = await sheets.spreadsheets.values.get({
+    spreadsheetId,
+    range: CAMP_SHEET_RANGE,
+  });
+
+  const rows = data.values ?? [];
+  // Skip the header row.
+  return rows.slice(1).map((row) => ({
+    timestamp: row[0] ?? "",
+    parentName: row[1] ?? "",
+    email: row[2] ?? "",
+    primaryPhone: row[3] ?? "",
+    secondaryPhone: row[4] ?? "",
+    childName: row[5] ?? "",
+    dateOfBirth: row[6] ?? "",
+    childAge: row[7] ?? "",
+    healthInfo: row[8] ?? "",
+    emergencyName: row[9] ?? "",
+    emergencyRelationship: row[10] ?? "",
+    emergencyPhone: row[11] ?? "",
+    week: row[12] ?? "",
+    codeOfConductAccepted: row[13] ?? "",
+    consentAccepted: row[14] ?? "",
+  }));
+}
+
+export async function appendCampRegistration(entry: Omit<CampRegistrationRow, "timestamp">): Promise<void> {
+  const sheets = getSheetsClient();
+  const spreadsheetId = process.env.GOOGLE_SHEETS_SHEET_ID!;
+
+  await sheets.spreadsheets.values.append({
+    spreadsheetId,
+    range: CAMP_SHEET_RANGE,
+    valueInputOption: "RAW",
+    requestBody: {
+      values: [
+        [
+          new Date().toISOString(),
+          entry.parentName,
+          entry.email,
+          entry.primaryPhone,
+          entry.secondaryPhone,
+          entry.childName,
+          entry.dateOfBirth,
+          entry.childAge,
+          entry.healthInfo,
+          entry.emergencyName,
+          entry.emergencyRelationship,
+          entry.emergencyPhone,
+          entry.week,
+          entry.codeOfConductAccepted,
+          entry.consentAccepted,
         ],
       ],
     },

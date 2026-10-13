@@ -102,6 +102,48 @@ export const juniorPrograms = {
   ],
 };
 
+export type CampWeekId =
+  | "jun22"
+  | "jun29"
+  | "jul06"
+  | "jul13"
+  | "jul20"
+  | "jul27"
+  | "aug03"
+  | "aug10"
+  | "aug17"
+  | "aug24";
+
+export type CampWeek = {
+  id: CampWeekId;
+  label: string;
+  dates: string;
+};
+
+export const juniorCamps = {
+  pricePerWeek: 380,
+  priceNote: "+ tax per person",
+  maxPerWeek: 30,
+  hours: "9:30 AM – 4:00 PM",
+  hoursLabel: "Full Day Camps",
+  venue: "summer" as const,
+  cancellationFee: 50,
+  // Live spots-remaining per week come from /api/camp-capacity (backed by
+  // the same Google Sheet as clinic sign-ups, on a separate tab).
+  weeks: [
+    { id: "jun22", label: "June 22, 23, 25 & 26", dates: "June 22, 23, 25, 26" },
+    { id: "jun29", label: "June 29, 30 & July 2, 3", dates: "June 29, 30, July 2, 3" },
+    { id: "jul06", label: "July 6, 7, 8 & 9", dates: "July 6, 7, 8, 9" },
+    { id: "jul13", label: "July 13, 14, 15 & 16", dates: "July 13, 14, 15, 16" },
+    { id: "jul20", label: "July 20, 21, 22 & 23", dates: "July 20, 21, 22, 23" },
+    { id: "jul27", label: "July 27, 28, 29 & 30", dates: "July 27, 28, 29, 30" },
+    { id: "aug03", label: "August 3, 4, 5 & 6", dates: "August 3, 4, 5, 6" },
+    { id: "aug10", label: "August 10, 11, 12 & 13", dates: "August 10, 11, 12, 13" },
+    { id: "aug17", label: "August 17, 18, 19 & 20", dates: "August 17, 18, 19, 20" },
+    { id: "aug24", label: "August 24, 25, 26 & 27", dates: "August 24, 25, 26, 27" },
+  ] satisfies CampWeek[],
+};
+
 export const bio = {
   intro:
     "I'm Coach James — a CPGA Golf Professional, competitor, and lifelong multi-sport athlete. Before dedicating myself fully to golf, I competed at the national level in go-karting and became a Quebec Bronze Gloves boxing champion. These experiences shaped my discipline, mental toughness, and drive to succeed — qualities I now pass on to my students.",
@@ -141,6 +183,7 @@ export const nav = [
   { label: "Individual Lessons", href: "/lessons" },
   { label: "Group Clinics", href: "/clinics" },
   { label: "Junior Programs", href: "/junior-programs" },
+  { label: "Junior Camps", href: "/junior-camps" },
   { label: "Book a Lesson", href: "/book" },
   { label: "Contact", href: "/contact" },
 ];
