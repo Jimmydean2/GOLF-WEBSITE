@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Image from "next/image";
 import Container from "@/components/Container";
 import CTAButton from "@/components/CTAButton";
-import { business, juniorPrograms, locations } from "@/lib/content";
+import { business, juniorCamps, juniorPrograms, locations } from "@/lib/content";
 
 export const metadata: Metadata = {
   title: `Junior Programs | ${business.name}`,
@@ -130,13 +130,40 @@ export default function JuniorProgramsPage() {
               programs open for registration?
             </p>
             <CTAButton href="/contact">Get in Touch</CTAButton>
-            <p className="text-sm text-ink-soft">
-              Looking for summer day camps instead?{" "}
-              <a href="/junior-camps" className="font-semibold text-forest hover:underline">
-                See Junior Camps
-              </a>
-              .
-            </p>
+          </div>
+        </Container>
+      </section>
+
+      <section className="py-16 sm:py-24">
+        <Container>
+          <div className="overflow-hidden rounded-2xl border border-gold/30 bg-cream-dark md:grid md:grid-cols-2 md:items-center">
+            <div className="relative h-56 md:h-full">
+              <Image
+                src="/images/junior-golf-lesson.jpg"
+                alt="Junior golfers at a summer camp session"
+                fill
+                className="object-cover object-top"
+                sizes="(min-width: 768px) 50vw, 100vw"
+              />
+            </div>
+            <div className="p-8 sm:p-10">
+              <p className="font-display text-sm uppercase tracking-[0.3em] text-gold">
+                Summer Day Camps
+              </p>
+              <h2 className="mt-3 font-display text-2xl font-semibold text-forest sm:text-3xl">
+                Looking for Junior Camps?
+              </h2>
+              <p className="mt-3 text-ink-soft">
+                Junior Camps are full-day summer sessions at{" "}
+                {locations[juniorCamps.venue].name} &mdash; a different
+                offering from the after-school programs above, running one
+                week at a time and capped at {juniorCamps.maxPerWeek} kids per
+                week.
+              </p>
+              <div className="mt-6">
+                <CTAButton href="/junior-camps">See Junior Camps</CTAButton>
+              </div>
+            </div>
           </div>
         </Container>
       </section>
