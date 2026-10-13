@@ -40,49 +40,56 @@ export default function JuniorCampsPromo() {
 
   return (
     <div
-      className="fixed inset-x-4 bottom-4 z-50 sm:inset-x-auto sm:bottom-6 sm:right-6 sm:w-80"
+      className="fixed inset-x-4 bottom-4 z-50 sm:inset-x-auto sm:bottom-6 sm:right-6 sm:w-72"
       role="complementary"
       aria-label="2026 Junior Camps promotion"
     >
-      <div className="relative overflow-hidden rounded-2xl border border-gold/30 bg-cream shadow-xl">
+      <div className="relative overflow-hidden rounded-2xl bg-forest shadow-xl">
         <button
           type="button"
           onClick={() => setVisible(false)}
           aria-label="Close"
-          className="absolute right-2 top-2 z-10 flex h-7 w-7 cursor-pointer items-center justify-center rounded-full bg-ink/50 text-cream transition-colors hover:bg-ink/70"
+          className="absolute right-2 top-2 z-10 flex h-8 w-8 cursor-pointer items-center justify-center rounded-full bg-cream text-forest transition-colors hover:bg-cream/90"
         >
           &times;
         </button>
 
-        <div className="relative h-24 w-full">
+        <div className="relative aspect-square w-full">
           <Image
             src="/images/junior-golf-lesson.jpg"
             alt="Junior golfers at a summer camp session"
             fill
             className="object-cover"
             style={{ objectPosition: "center 35%" }}
-            sizes="320px"
+            sizes="288px"
           />
+          <div className="absolute inset-x-0 top-0 bg-forest-dark/90 py-1.5 text-center">
+            <p className="font-display text-[0.65rem] font-semibold uppercase tracking-[0.15em] text-cream">
+              2026 Junior Golf Camps
+            </p>
+          </div>
         </div>
 
-        <div className="p-4">
-          <p className="font-display text-xs uppercase tracking-[0.2em] text-gold">
-            2026 Junior Camps
-          </p>
-          <h2 className="mt-1 font-display text-base font-semibold text-forest">
-            Registration is Open
+        <div className="p-5 text-center">
+          <h2 className="font-display text-xl font-bold uppercase leading-tight text-cream">
+            Registration
+            <br />
+            is Open
           </h2>
-          <p className="mt-2 text-xs text-ink-soft">
+          <p className="mt-3 text-xs text-cream/85">
             A full day at {locations[juniorCamps.venue].name} &mdash; limited to{" "}
             {juniorCamps.maxPerWeek} kids per week.
           </p>
           <Link
             href="/junior-camps"
             onClick={() => setVisible(false)}
-            className="mt-3 inline-flex w-full items-center justify-center rounded-full bg-forest px-4 py-2 text-xs font-semibold text-cream transition-colors hover:bg-forest-dark"
+            className="mt-4 inline-flex w-full items-center justify-center rounded-full border-2 border-cream px-4 py-2 text-xs font-semibold text-cream transition-colors hover:bg-cream hover:text-forest"
           >
             See Camp Dates
           </Link>
+          <p className="mt-3 text-[0.65rem] text-cream/70">
+            Spots are limited and subject to availability.
+          </p>
         </div>
       </div>
     </div>
