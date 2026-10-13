@@ -1,9 +1,9 @@
 "use client";
 
 import Image from "next/image";
-import { useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 
-type Slide = { src: string; alt: string };
+type Slide = { src: string; alt: string; mobileSrc?: string };
 
 const INTERVAL_MS = 4000;
 
@@ -40,19 +40,42 @@ export default function HeroCarousel({ slides }: { slides: Slide[] }) {
       onFocus={() => setPaused(true)}
       onBlur={() => setPaused(false)}
     >
-      {slides.map((slide, i) => (
-        <Image
-          key={slide.src}
-          src={slide.src}
-          alt={i === index ? slide.alt : ""}
-          fill
-          priority={i === 0}
-          className={`object-cover transition-opacity duration-1000 ease-in-out ${
-            i === index ? "opacity-100" : "opacity-0"
-          }`}
-          sizes="100vw"
-        />
-      ))}
+      {slides.map((slide, i) => {
+        const opacityClass = i === index ? "opacity-100" : "opacity-0";
+        if (slide.mobileSrc) {
+          return (
+            <Fragment key={slide.src}>
+              <Image
+                src={slide.mobileSrc}
+                alt={i === index ? slide.alt : ""}
+                fill
+                priority={i === 0}
+                className={`object-cover transition-opacity duration-1000 ease-in-out sm:hidden ${opacityClass}`}
+                sizes="100vw"
+              />
+              <Image
+                src={slide.src}
+                alt={i === index ? slide.alt : ""}
+                fill
+                priority={i === 0}
+                className={`hidden object-cover transition-opacity duration-1000 ease-in-out sm:block ${opacityClass}`}
+                sizes="100vw"
+              />
+            </Fragment>
+          );
+        }
+        return (
+          <Image
+            key={slide.src}
+            src={slide.src}
+            alt={i === index ? slide.alt : ""}
+            fill
+            priority={i === 0}
+            className={`object-cover transition-opacity duration-1000 ease-in-out ${opacityClass}`}
+            sizes="100vw"
+          />
+        );
+      })}
 
       {slides.length > 1 && (
         <div className="absolute bottom-6 left-1/2 z-20 flex -translate-x-1/2 items-center gap-3">
