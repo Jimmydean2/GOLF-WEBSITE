@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { groupClinics, type ClinicCohortId } from "@/lib/content";
 import { appendClinicSignup, getClinicSignups, isGoogleSheetsConfigured } from "@/lib/googleSheets";
+import { isValidEmail } from "@/lib/validation";
 
 const VALID_COHORTS = groupClinics.cohorts.map((c) => c.id);
 
@@ -28,6 +29,10 @@ export async function POST(request: Request) {
 
   if (!firstName || !lastName || !email || !phone || !cohort) {
     return NextResponse.json({ error: "Please fill in all required fields." }, { status: 400 });
+  }
+
+  if (!isValidEmail(email)) {
+    return NextResponse.json({ error: "Please enter a valid email address." }, { status: 400 });
   }
 
   if (!VALID_COHORTS.includes(cohort)) {

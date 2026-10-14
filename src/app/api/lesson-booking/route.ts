@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createLessonEvent, getBusyIntervals, isGoogleCalendarConfigured } from "@/lib/googleCalendar";
 import { appendLessonBooking, isGoogleSheetsConfigured } from "@/lib/googleSheets";
+import { isValidEmail } from "@/lib/validation";
 import {
   formatDateLabel,
   formatDateLongLabel,
@@ -35,6 +36,10 @@ export async function POST(request: Request) {
 
   if (!firstName || !lastName || !email || !phone || !startRaw) {
     return NextResponse.json({ error: "Please fill in all required fields." }, { status: 400 });
+  }
+
+  if (!isValidEmail(email)) {
+    return NextResponse.json({ error: "Please enter a valid email address." }, { status: 400 });
   }
 
   const start = new Date(startRaw);

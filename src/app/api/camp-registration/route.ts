@@ -4,6 +4,7 @@ import { business, juniorCamps, type CampWeekId } from "@/lib/content";
 import { appendCampRegistration, getCampRegistrations, isGoogleSheetsConfigured } from "@/lib/googleSheets";
 import { isEmailConfigured, sendEmail } from "@/lib/email";
 import { buildCoachNotificationEmail } from "@/lib/campEmailTemplates";
+import { isValidEmail } from "@/lib/validation";
 
 const VALID_WEEKS = juniorCamps.weeks.map((w) => w.id);
 const weekLabel = (id: string) => juniorCamps.weeks.find((w) => w.id === id)?.label ?? id;
@@ -53,6 +54,10 @@ export async function POST(request: Request) {
     weeks.length === 0
   ) {
     return NextResponse.json({ error: "Please fill in all required fields and pick at least one camp week." }, { status: 400 });
+  }
+
+  if (!isValidEmail(email)) {
+    return NextResponse.json({ error: "Please enter a valid email address." }, { status: 400 });
   }
 
   if (!codeOfConductAccepted || !consentAccepted) {

@@ -7,6 +7,18 @@ const INK_SOFT = "#4a463c";
 const CREAM = "#fbf6ea";
 const BORDER = "#e4d9b8";
 
+// Every value below comes from the public registration form — escape before
+// interpolating into HTML so a submitted name/note can't inject markup or
+// links into the coach's or parent's email.
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 function weekLabel(weekId: string): string {
   return juniorCamps.weeks.find((w) => w.id === weekId)?.label ?? weekId;
 }
@@ -83,7 +95,7 @@ export function buildCoachNotificationEmail(
   const detailsHtml = detailsRows
     .map(
       ([label, value]) =>
-        `<tr><td style="padding:6px 0; font-size:13px; color:${INK_SOFT}; width:40%; vertical-align:top;">${label}</td><td style="padding:6px 0; font-size:13px; color:#1b1b16; font-weight:600; vertical-align:top;">${value}</td></tr>`
+        `<tr><td style="padding:6px 0; font-size:13px; color:${INK_SOFT}; width:40%; vertical-align:top;">${escapeHtml(label)}</td><td style="padding:6px 0; font-size:13px; color:#1b1b16; font-weight:600; vertical-align:top;">${escapeHtml(value)}</td></tr>`
     )
     .join("\n");
 
@@ -125,12 +137,14 @@ export function buildParentConfirmationEmail(entry: CampRegistrationRow): {
   const venue = locations[juniorCamps.venue];
   const firstName = entry.parentName.split(" ")[0] || entry.parentName;
   const subject = `You're confirmed! ${entry.childName}'s spot at ${business.name} Junior Camp`;
+  const safeFirstName = escapeHtml(firstName);
+  const safeChildName = escapeHtml(entry.childName);
 
   const html = emailShell(`
     <p style="margin:0 0 16px; font-family:Georgia,'Times New Roman',serif; font-size:22px; font-weight:bold; color:${FOREST};">Thank you — you're all set!</p>
-    <p style="margin:0 0 16px; font-size:14px; color:${INK_SOFT}; line-height:1.6;">Hi ${firstName},</p>
+    <p style="margin:0 0 16px; font-size:14px; color:${INK_SOFT}; line-height:1.6;">Hi ${safeFirstName},</p>
     <p style="margin:0 0 20px; font-size:14px; color:${INK_SOFT}; line-height:1.6;">
-      Payment has been received and <strong>${entry.childName}'s</strong> spot${weekCount === 1 ? " is" : "s are"} now confirmed for Junior Camp. We can't wait to see them on the course! Here's everything you need for camp day.
+      Payment has been received and <strong>${safeChildName}'s</strong> spot${weekCount === 1 ? " is" : "s are"} now confirmed for Junior Camp. We can't wait to see them on the course! Here's everything you need for camp day.
     </p>
 
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 20px; border:1px solid ${BORDER}; border-radius:12px;">
