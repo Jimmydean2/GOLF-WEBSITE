@@ -48,10 +48,15 @@ export default function ClinicsPage() {
                 key={clinic.number}
                 className="rounded-2xl border border-gold/30 bg-cream-dark p-8"
               >
-                <p className="font-display text-sm uppercase tracking-[0.2em] text-gold">
-                  Clinic {clinic.number}
-                </p>
-                <h2 className="mt-1 font-display text-xl font-semibold text-forest">
+                <div className="flex items-center gap-4">
+                  <span className="flex h-12 w-12 flex-none items-center justify-center rounded-full bg-gradient-to-br from-gold-light via-gold to-gold-deep font-display text-xl font-bold text-ink shadow-md shadow-black/20">
+                    {clinic.number}
+                  </span>
+                  <p className="font-display text-base font-bold uppercase tracking-[0.2em] text-gold-deep">
+                    Clinic {clinic.number}
+                  </p>
+                </div>
+                <h2 className="mt-3 font-display text-xl font-semibold text-forest">
                   {clinic.title}
                 </h2>
                 <p className="mt-3 text-sm text-ink-soft">{clinic.description}</p>
