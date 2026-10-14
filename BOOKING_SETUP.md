@@ -121,7 +121,23 @@ expose your real Gmail password, and you can revoke it anytime).
 
 ---
 
-## Send me six things and I'll wire it all in
+## Step 5: Set an admin password for printable camp rosters (~1 minute)
+
+This gives you a private page, **yoursite.com/admin/camp-rosters**, where
+you can download a print-ready roster workbook any time — one sheet per
+camp week, every registered camper's name, age, parent, phone numbers,
+emergency contact, allergy notes, and paid status already filled in from
+real sign-ups, plus 30 blank rows total per week so you can hand it
+straight to whoever's working that week. It's always current — download
+it again any time and it reflects every registration up to that second.
+
+Just pick any password and send it to me along with the other items
+below — no account to create, nothing to click through. Keep it private;
+anyone with it can see campers' contact and health info.
+
+---
+
+## Send me seven things and I'll wire it all in
 
 - The `client_email` value from the JSON file (Step 1)
 - The `private_key` value from the JSON file (the whole thing, including
@@ -130,11 +146,13 @@ expose your real Gmail password, and you can revoke it anytime).
 - The spreadsheet ID (Step 3)
 - Your Gmail address (Step 4)
 - The 16-character App Password (Step 4)
+- Your chosen admin password (Step 5)
 
 These get set as private environment variables on the hosting side (never
 committed to the code), matching the names in `.env.local.example` in this
 repo: `GOOGLE_SERVICE_ACCOUNT_CLIENT_EMAIL`, `GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY`,
-`GOOGLE_CALENDAR_ID`, `GOOGLE_SHEETS_SHEET_ID`, `GMAIL_USER`, `GMAIL_APP_PASSWORD`.
+`GOOGLE_CALENDAR_ID`, `GOOGLE_SHEETS_SHEET_ID`, `GMAIL_USER`, `GMAIL_APP_PASSWORD`,
+`ADMIN_PASSWORD`.
 
 Once those are set:
 - The **Book a Lesson** page shows a real month calendar of your actual open
@@ -154,6 +172,10 @@ Once those are set:
   it once the e-transfer is in automatically emails the parent their full
   confirmation (dates, drop-off/pick-up times, what to bring, safety info).
   Clicking it a second time is harmless — it won't send a duplicate email.
+- **yoursite.com/admin/camp-rosters** (behind your admin password) lets
+  you download a printable roster workbook any time, one sheet per camp
+  week, auto-filled with every current registration — always up to date,
+  no manual copying.
 
 ---
 
