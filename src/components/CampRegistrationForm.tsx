@@ -31,14 +31,28 @@ export default function CampRegistrationForm() {
   // A week picked via URL (from the overview tiles) seeds the picker; the
   // shopper can then add or remove weeks freely — one form, any number of
   // weeks, info entered only once.
-  const [selectedWeeks, setSelectedWeeks] = useState<Set<CampWeekId>>(() => {
-    const requested = searchParams.get("week");
-    const seed = new Set<CampWeekId>();
-    if (requested && CAMP_WEEK_IDS.has(requested as CampWeekId)) {
-      seed.add(requested as CampWeekId);
+  const [selectedWeeks, setSelectedWeeks] = useState<Set<CampWeekId>>(() => new Set());
+
+  // The tiles above link to this same page with a new ?week= value, which
+  // Next's router treats as an in-place update rather than a remount — so
+  // a plain useState initializer only ever catches the week present on the
+  // very first load. Comparing against the last-seen param during render
+  // (React's documented pattern for adjusting state on a prop change) also
+  // catches a tile tap after the form is already mounted, which is the
+  // normal case since both live on this one page.
+  const requestedWeek = searchParams.get("week");
+  const [seededWeek, setSeededWeek] = useState<string | null>(null);
+  if (requestedWeek !== seededWeek) {
+    setSeededWeek(requestedWeek);
+    if (requestedWeek && CAMP_WEEK_IDS.has(requestedWeek as CampWeekId)) {
+      setSelectedWeeks((prev) => {
+        if (prev.has(requestedWeek as CampWeekId)) return prev;
+        const next = new Set(prev);
+        next.add(requestedWeek as CampWeekId);
+        return next;
+      });
     }
-    return seed;
-  });
+  }
 
   // Filter out any selected week that capacity has since revealed is full
   // (e.g. it filled up between page load and now) without an extra effect.
@@ -275,7 +289,7 @@ export default function CampRegistrationForm() {
                       selected ? "text-gold-light" : "text-flag"
                     }`}
                   >
-                    Filling up — register now!
+                    Filling up fast — don&apos;t wait!
                   </span>
                 )}
               </button>

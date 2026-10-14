@@ -233,7 +233,13 @@ function LocationCard({
   return (
     <div className="overflow-hidden rounded-2xl border border-gold/30 bg-cream shadow-sm">
       <div className="relative h-56 w-full">
-        <Image src={image} alt={`${name} practice facility`} fill className="object-cover" />
+        <Image
+          src={image}
+          alt={`${name} practice facility`}
+          fill
+          className="object-cover"
+          sizes="(min-width: 768px) 50vw, 100vw"
+        />
       </div>
       <div className="p-6">
         <p className="font-display text-sm uppercase tracking-[0.2em] text-gold">{season}</p>

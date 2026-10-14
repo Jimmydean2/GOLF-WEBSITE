@@ -40,11 +40,49 @@ export default function JuniorCampsPromo() {
 
   return (
     <div
-      className="fixed inset-x-4 bottom-4 z-50 sm:inset-x-auto sm:bottom-6 sm:right-6 sm:w-72"
+      className="fixed inset-x-0 bottom-0 z-50 sm:inset-x-auto sm:bottom-6 sm:right-6 sm:w-72"
       role="complementary"
       aria-label="2026 Junior Camps promotion"
     >
-      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-forest via-forest to-forest-dark shadow-xl ring-1 ring-gold/30 shadow-black/40">
+      {/* Mobile: a slim bar, not a tall card — a full-height card here would
+          sit over whatever form field the shopper scrolls to next, since
+          mobile inputs run edge to edge. */}
+      <div className="flex items-center gap-3 border-t border-gold/40 bg-forest-dark px-4 py-3 shadow-xl shadow-black/40 sm:hidden">
+        <div className="relative h-12 w-12 flex-none overflow-hidden rounded-lg">
+          <Image
+            src="/images/junior-golf-lesson.jpg"
+            alt=""
+            fill
+            className="object-cover"
+            style={{ objectPosition: "center 35%" }}
+            sizes="48px"
+          />
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="truncate font-display text-sm font-semibold text-cream">
+            2026 Junior Camps &mdash; Registration is Open
+          </p>
+          <Link
+            href="/junior-camps"
+            onClick={() => setVisible(false)}
+            className="text-xs font-semibold text-gold-light underline underline-offset-2"
+          >
+            See camp dates &rarr;
+          </Link>
+        </div>
+        <button
+          type="button"
+          onClick={() => setVisible(false)}
+          aria-label="Close"
+          className="flex h-8 w-8 flex-none cursor-pointer items-center justify-center rounded-full bg-cream text-forest transition-colors hover:bg-cream/90"
+        >
+          &times;
+        </button>
+      </div>
+
+      {/* Desktop/tablet: the full card, corner-anchored with plenty of page
+          around it, so it never blocks the rest of the page. */}
+      <div className="relative hidden overflow-hidden rounded-2xl bg-gradient-to-br from-forest via-forest to-forest-dark shadow-xl ring-1 ring-gold/30 shadow-black/40 sm:block">
         <button
           type="button"
           onClick={() => setVisible(false)}

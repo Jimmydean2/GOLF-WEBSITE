@@ -64,19 +64,37 @@ export async function POST(request: Request) {
   const end = new Date(start.getTime() + LESSON_MINUTES * 60_000);
   const bufferMs = LESSON_BUFFER_MINUTES * 60_000;
 
+  const occurrences = recurringWeeks ?? 1;
+  const occurrenceWindows: { start: Date; end: Date }[] = [];
+  for (let i = 0; i < occurrences; i++) {
+    const occStart = new Date(start.getTime() + i * 7 * 24 * 60 * 60_000);
+    const occEnd = new Date(occStart.getTime() + LESSON_MINUTES * 60_000);
+    occurrenceWindows.push({ start: occStart, end: occEnd });
+  }
+
   try {
-    // Query a bit before `start` too, so an existing lesson whose own
-    // buffer extends into this candidate is still caught.
-    const queryStart = new Date(start.getTime() - bufferMs);
-    const busy = await getBusyIntervals(queryStart.toISOString(), end.toISOString());
-    const conflict = busy.some((b) => {
-      const busyStart = new Date(b.start).getTime();
-      const busyEnd = new Date(b.end).getTime() + bufferMs;
-      return start.getTime() < busyEnd && end.getTime() > busyStart;
-    });
-    if (conflict) {
+    // Query across every occurrence's window, not just the first — a
+    // recurring booking is only safe to create if every week in the
+    // series is actually free. Pad the start so an existing lesson whose
+    // own buffer extends into a candidate window is still caught.
+    const queryStart = new Date(occurrenceWindows[0].start.getTime() - bufferMs);
+    const queryEnd = occurrenceWindows[occurrenceWindows.length - 1].end;
+    const busy = await getBusyIntervals(queryStart.toISOString(), queryEnd.toISOString());
+    const conflictingOccurrence = occurrenceWindows.find((occ) =>
+      busy.some((b) => {
+        const busyStart = new Date(b.start).getTime();
+        const busyEnd = new Date(b.end).getTime() + bufferMs;
+        return occ.start.getTime() < busyEnd && occ.end.getTime() > busyStart;
+      })
+    );
+    if (conflictingOccurrence) {
+      const sameDay = conflictingOccurrence === occurrenceWindows[0];
       return NextResponse.json(
-        { error: "That time was just booked by someone else. Please pick another." },
+        {
+          error: sameDay
+            ? "That time was just booked by someone else. Please pick another."
+            : `That weekly time is open today, but conflicts with an existing booking on ${formatDateLabel(conflictingOccurrence.start)}. Please pick a different time or a shorter series.`,
+        },
         { status: 409 }
       );
     }
@@ -93,12 +111,7 @@ export async function POST(request: Request) {
       recurring: recurringWeeks ? `Weekly × ${recurringWeeks}` : "No",
     });
 
-    const occurrences = recurringWeeks ?? 1;
-    const bookedDates: string[] = [];
-    for (let i = 0; i < occurrences; i++) {
-      const occurrence = new Date(start.getTime() + i * 7 * 24 * 60 * 60_000);
-      bookedDates.push(formatDateLabel(occurrence));
-    }
+    const bookedDates = occurrenceWindows.map((occ) => formatDateLabel(occ.start));
 
     return NextResponse.json({ success: true, bookedDates, lessonTime: formatTimeLabel(start) });
   } catch {
