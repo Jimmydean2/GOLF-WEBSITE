@@ -19,6 +19,7 @@ export default function CampRegistrationForm() {
   const searchParams = useSearchParams();
   const [status, setStatus] = useState<Status>("idle");
   const [errorMessage, setErrorMessage] = useState("");
+  const [submittedWeekCount, setSubmittedWeekCount] = useState(0);
   const [codeOfConductAccepted, setCodeOfConductAccepted] = useState(false);
   const [consentAccepted, setConsentAccepted] = useState(false);
   const [capacity, setCapacity] = useState<CapacityState>({
@@ -141,6 +142,7 @@ export default function CampRegistrationForm() {
 
       if (response.ok && result.success) {
         setStatus("success");
+        setSubmittedWeekCount(weekCount);
         form.reset();
         setSelectedWeeks(new Set());
         setCodeOfConductAccepted(false);
@@ -156,6 +158,7 @@ export default function CampRegistrationForm() {
   }
 
   if (status === "success") {
+    const submittedTotal = submittedWeekCount * juniorCamps.pricePerWeek;
     return (
       <div className="rounded-2xl border border-gold/30 bg-cream p-8 text-center">
         <p className="font-display text-xl font-semibold text-forest">
@@ -166,6 +169,10 @@ export default function CampRegistrationForm() {
           Coach James will review availability and reach out to confirm and
           arrange payment &mdash; spots are only secured once payment is
           received in full.
+        </p>
+        <p className="mt-4 rounded-xl bg-cream-dark px-4 py-3 font-display text-base font-semibold text-forest">
+          Total due: {submittedWeekCount} week{submittedWeekCount === 1 ? "" : "s"} &times; $
+          {juniorCamps.pricePerWeek} = ${submittedTotal} {juniorCamps.priceNote}
         </p>
       </div>
     );
