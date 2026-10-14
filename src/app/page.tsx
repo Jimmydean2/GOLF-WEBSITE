@@ -55,13 +55,21 @@ export default function Home() {
       {/* Intro */}
       <section className="py-16 sm:py-24">
         <Container className="grid items-center gap-12 md:grid-cols-2">
-          <div className="overflow-hidden rounded-2xl shadow-lg">
+          <div className="relative overflow-hidden rounded-2xl shadow-lg">
             <Image
               src="/images/coach-fundamentals-lesson.jpg"
               alt="Coach James guiding a young golfer's setup at the driving range"
               width={1290}
               height={2293}
               className="h-full w-full object-cover"
+            />
+            <div
+              className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/20 via-transparent to-transparent"
+              aria-hidden="true"
+            />
+            <div
+              className="pointer-events-none absolute inset-0 bg-gradient-to-tr from-gold/10 via-transparent to-transparent mix-blend-overlay"
+              aria-hidden="true"
             />
           </div>
           <div>
