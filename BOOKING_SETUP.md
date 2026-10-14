@@ -179,11 +179,38 @@ Once those are set:
 
 ---
 
-## A note on deployment
+## Publishing the site (~5 minutes, no coding)
 
-All of this only goes live once the site is actually deployed to a public
-URL (connecting this repo to Vercel or another host — a separate one-time
-step from pushing code to GitHub). Until both the deployment and the
-credentials above are in place, the site gracefully shows a "reserve by
-phone/email" fallback in both spots, so nothing looks broken in the
-meantime.
+The code lives on GitHub, but that alone doesn't put it on the internet —
+that takes one more step: connecting this repo to a hosting service. I'd
+recommend **Vercel**, the company that makes Next.js (the framework this
+site is built with) — it's free for a site this size, and deploying from
+GitHub is a few clicks with nothing to configure.
+
+1. Go to [vercel.com](https://vercel.com) and sign up using the **same
+   GitHub account** this repository lives under (look for "Continue with
+   GitHub"). This lets Vercel see your repos without you creating a
+   separate password.
+2. Click **Add New... → Project**, then find and select the
+   `GOLF-WEBSITE` repository and click **Import**.
+3. Vercel auto-detects it's a Next.js site, so the build settings are
+   already correct — just click **Deploy**. It takes a minute or two.
+4. You'll get a free address like `golf-website-xyz.vercel.app`
+   immediately. If you own a domain (or want to buy one, e.g. from
+   Namecheap or Google Domains), go to the project's **Settings →
+   Domains** in Vercel and follow the prompts to connect it — Vercel
+   walks you through the few DNS records to add at your domain
+   registrar.
+5. Any time new code is pushed to this repo's main branch going forward,
+   Vercel automatically redeploys the live site within a minute or two —
+   nothing further to click.
+
+Once live, go back to **Step 1–5** above whenever you're ready: send me
+the seven items and I'll add them as private settings in the Vercel
+project (**Settings → Environment Variables**) myself, or walk you
+through adding them there directly if you'd rather handle it yourself.
+
+Until both the deployment and the seven credentials are in place, the
+site gracefully shows a "reserve by phone/email" fallback in the booking
+spots, so nothing looks broken or half-finished in the meantime — you can
+publish now and wire up live booking whenever the credentials are ready.
