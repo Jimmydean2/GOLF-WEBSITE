@@ -12,7 +12,7 @@ export default function Navbar() {
             alt={`${business.name} logo`}
             width={48}
             height={48}
-            className="h-12 w-12 rounded-full ring-1 ring-gold/40"
+            className="h-12 w-12 rounded-full object-contain"
             priority
           />
           <span className="font-display text-lg font-semibold text-forest sm:text-xl">

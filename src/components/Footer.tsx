@@ -14,7 +14,7 @@ export default function Footer() {
               alt={`${business.name} logo`}
               width={44}
               height={44}
-              className="h-11 w-11 rounded-full ring-1 ring-gold-light/40"
+              className="h-11 w-11 rounded-full object-contain"
             />
             <span className="font-display text-lg font-semibold">{business.name}</span>
           </div>
