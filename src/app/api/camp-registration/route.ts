@@ -6,6 +6,7 @@ import { isEmailConfigured, sendEmail } from "@/lib/email";
 import { buildCoachNotificationEmail } from "@/lib/campEmailTemplates";
 
 const VALID_WEEKS = juniorCamps.weeks.map((w) => w.id);
+const weekLabel = (id: string) => juniorCamps.weeks.find((w) => w.id === id)?.label ?? id;
 
 export async function POST(request: Request) {
   if (!isGoogleSheetsConfigured()) {
@@ -33,7 +34,8 @@ export async function POST(request: Request) {
   const emergencyName = String(body.emergencyName ?? "").trim();
   const emergencyRelationship = String(body.emergencyRelationship ?? "").trim();
   const emergencyPhone = String(body.emergencyPhone ?? "").trim();
-  const week = String(body.week ?? "").trim() as CampWeekId;
+  const weeksInput = Array.isArray(body.weeks) ? body.weeks : [];
+  const weeks = Array.from(new Set(weeksInput.map((w) => String(w).trim()).filter(Boolean))) as CampWeekId[];
   const codeOfConductAccepted = body.codeOfConductAccepted === true;
   const consentAccepted = body.consentAccepted === true;
 
@@ -48,9 +50,9 @@ export async function POST(request: Request) {
     !emergencyName ||
     !emergencyRelationship ||
     !emergencyPhone ||
-    !week
+    weeks.length === 0
   ) {
-    return NextResponse.json({ error: "Please fill in all required fields." }, { status: 400 });
+    return NextResponse.json({ error: "Please fill in all required fields and pick at least one camp week." }, { status: 400 });
   }
 
   if (!codeOfConductAccepted || !consentAccepted) {
@@ -60,23 +62,30 @@ export async function POST(request: Request) {
     );
   }
 
-  if (!VALID_WEEKS.includes(week)) {
-    return NextResponse.json({ error: "Please pick a valid camp week." }, { status: 400 });
+  if (weeks.some((w) => !VALID_WEEKS.includes(w))) {
+    return NextResponse.json({ error: "Please pick valid camp weeks." }, { status: 400 });
   }
 
   try {
     const existing = await getCampRegistrations();
-    const takenCount = existing.filter((r) => r.week === week).length;
+    const fullWeeks = weeks.filter((weekId) => {
+      const taken = existing.filter((r) => r.weeks.split(",").includes(weekId)).length;
+      return taken >= juniorCamps.maxPerWeek;
+    });
 
-    if (takenCount >= juniorCamps.maxPerWeek) {
+    if (fullWeeks.length > 0) {
       return NextResponse.json(
-        { error: "That week is full. Please pick another one or contact us directly." },
+        {
+          error: `These weeks just filled up: ${fullWeeks.map(weekLabel).join(", ")}. Please remove them and try again.`,
+        },
         { status: 409 }
       );
     }
 
     const id = randomUUID();
     const confirmToken = randomBytes(24).toString("hex");
+
+    const weeksCsv = weeks.join(",");
 
     await appendCampRegistration({
       parentName,
@@ -90,7 +99,7 @@ export async function POST(request: Request) {
       emergencyName,
       emergencyRelationship,
       emergencyPhone,
-      week,
+      weeks: weeksCsv,
       codeOfConductAccepted: "Yes",
       consentAccepted: "Yes",
       id,
@@ -117,7 +126,7 @@ export async function POST(request: Request) {
             emergencyName,
             emergencyRelationship,
             emergencyPhone,
-            week,
+            weeks: weeksCsv,
             codeOfConductAccepted: "Yes",
             consentAccepted: "Yes",
             id,

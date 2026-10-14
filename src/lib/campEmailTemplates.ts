@@ -11,6 +11,15 @@ function weekLabel(weekId: string): string {
   return juniorCamps.weeks.find((w) => w.id === weekId)?.label ?? weekId;
 }
 
+function parseWeekIds(weeksCsv: string): string[] {
+  return weeksCsv.split(",").map((id) => id.trim()).filter(Boolean);
+}
+
+function weekSummary(weeksCsv: string): { ids: string[]; labels: string[]; total: number } {
+  const ids = parseWeekIds(weeksCsv);
+  return { ids, labels: ids.map(weekLabel), total: ids.length * juniorCamps.pricePerWeek };
+}
+
 function emailShell(bodyHtml: string): string {
   return `<!doctype html>
 <html>
@@ -52,11 +61,14 @@ export function buildCoachNotificationEmail(
   entry: CampRegistrationRow & { id: string; confirmToken: string },
   confirmUrl: string
 ): { subject: string; html: string; text: string } {
-  const week = weekLabel(entry.week);
-  const subject = `New camp registration — ${entry.childName} (${week})`;
+  const { labels, total } = weekSummary(entry.weeks);
+  const weekCount = labels.length;
+  const weeksDisplay = labels.join(", ");
+  const subject = `New camp registration — ${entry.childName} (${weekCount} week${weekCount === 1 ? "" : "s"})`;
 
   const detailsRows: [string, string][] = [
-    ["Camp week", week],
+    ["Camp week" + (weekCount === 1 ? "" : "s"), weeksDisplay],
+    ["Total due", `$${total} + tax`],
     ["Parent/guardian", entry.parentName],
     ["Parent email", entry.email],
     ["Primary phone", entry.primaryPhone],
@@ -77,7 +89,7 @@ export function buildCoachNotificationEmail(
 
   const html = emailShell(`
     <p style="margin:0 0 16px; font-family:Georgia,'Times New Roman',serif; font-size:20px; font-weight:bold; color:${FOREST};">New Junior Camp registration</p>
-    <p style="margin:0 0 20px; font-size:14px; color:${INK_SOFT}; line-height:1.6;">A new registration came in for <strong>${week}</strong>. Review the details below, and once you've received the e-transfer, click the button to confirm the spot and automatically send the parent their full confirmation email.</p>
+    <p style="margin:0 0 20px; font-size:14px; color:${INK_SOFT}; line-height:1.6;">A new registration came in for <strong>${weeksDisplay}</strong>. Review the details below, and once you've received the e-transfer for the full amount, click the button to confirm ${weekCount === 1 ? "the spot" : "all spots"} and automatically send the parent their full confirmation email.</p>
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:24px;">
       ${detailsHtml}
     </table>
@@ -91,7 +103,7 @@ export function buildCoachNotificationEmail(
     <p style="margin:16px 0 0; font-size:12px; color:${INK_SOFT}; text-align:center;">Only click this once you've confirmed payment was received in full.</p>
   `);
 
-  const text = `New Junior Camp registration — ${week}
+  const text = `New Junior Camp registration — ${weeksDisplay}
 
 ${detailsRows.map(([label, value]) => `${label}: ${value}`).join("\n")}
 
@@ -106,7 +118,10 @@ export function buildParentConfirmationEmail(entry: CampRegistrationRow): {
   html: string;
   text: string;
 } {
-  const week = weekLabel(entry.week);
+  const { labels, total } = weekSummary(entry.weeks);
+  const weekCount = labels.length;
+  const datesHtml = labels.map((l) => `<span style="display:block;">${l}</span>`).join("");
+  const datesText = labels.join("\n");
   const venue = locations[juniorCamps.venue];
   const firstName = entry.parentName.split(" ")[0] || entry.parentName;
   const subject = `You're confirmed! ${entry.childName}'s spot at ${business.name} Junior Camp`;
@@ -115,14 +130,16 @@ export function buildParentConfirmationEmail(entry: CampRegistrationRow): {
     <p style="margin:0 0 16px; font-family:Georgia,'Times New Roman',serif; font-size:22px; font-weight:bold; color:${FOREST};">Thank you — you're all set!</p>
     <p style="margin:0 0 16px; font-size:14px; color:${INK_SOFT}; line-height:1.6;">Hi ${firstName},</p>
     <p style="margin:0 0 20px; font-size:14px; color:${INK_SOFT}; line-height:1.6;">
-      Payment has been received and <strong>${entry.childName}'s</strong> spot is now confirmed for Junior Camp. We can't wait to see them on the course! Here's everything you need for camp day.
+      Payment has been received and <strong>${entry.childName}'s</strong> spot${weekCount === 1 ? " is" : "s are"} now confirmed for Junior Camp. We can't wait to see them on the course! Here's everything you need for camp day.
     </p>
 
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 20px; border:1px solid ${BORDER}; border-radius:12px;">
       <tr>
         <td style="padding:16px 20px;">
-          <p style="margin:0 0 4px; font-size:12px; letter-spacing:0.08em; text-transform:uppercase; color:${GOLD}; font-weight:bold;">Confirmed Dates</p>
-          <p style="margin:0 0 10px; font-size:16px; font-weight:bold; color:${FOREST};">${week}</p>
+          <p style="margin:0 0 4px; font-size:12px; letter-spacing:0.08em; text-transform:uppercase; color:${GOLD}; font-weight:bold;">Confirmed Week${weekCount === 1 ? "" : "s"}</p>
+          <div style="margin:0 0 10px; font-size:16px; font-weight:bold; color:${FOREST};">${datesHtml}</div>
+          <p style="margin:0 0 4px; font-size:12px; letter-spacing:0.08em; text-transform:uppercase; color:${GOLD}; font-weight:bold;">Total Paid</p>
+          <p style="margin:0 0 10px; font-size:14px; color:#1b1b16;">$${total} + tax (${weekCount} week${weekCount === 1 ? "" : "s"} &times; $${juniorCamps.pricePerWeek})</p>
           <p style="margin:0 0 4px; font-size:12px; letter-spacing:0.08em; text-transform:uppercase; color:${GOLD}; font-weight:bold;">Hours</p>
           <p style="margin:0 0 10px; font-size:14px; color:#1b1b16;">${juniorCamps.hours}</p>
           <p style="margin:0 0 4px; font-size:12px; letter-spacing:0.08em; text-transform:uppercase; color:${GOLD}; font-weight:bold;">Location</p>
@@ -155,9 +172,12 @@ export function buildParentConfirmationEmail(entry: CampRegistrationRow): {
 
 Hi ${firstName},
 
-Payment has been received and ${entry.childName}'s spot is confirmed for Junior Camp.
+Payment has been received and ${entry.childName}'s spot${weekCount === 1 ? " is" : "s are"} confirmed for Junior Camp.
 
-CONFIRMED DATES: ${week}
+CONFIRMED WEEK${weekCount === 1 ? "" : "S"}:
+${datesText}
+
+TOTAL PAID: $${total} + tax (${weekCount} week${weekCount === 1 ? "" : "s"} x $${juniorCamps.pricePerWeek})
 HOURS: ${juniorCamps.hours}
 LOCATION: ${venue.name}, ${venue.address}
 

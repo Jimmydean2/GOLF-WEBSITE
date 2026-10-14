@@ -9,8 +9,14 @@ import { getGoogleAuth, isGoogleServiceAccountConfigured } from "./googleAuth";
 // LessonBookings tab header (row 1): Timestamp | First Name | Last Name | Email | Phone | Lesson Date | Lesson Time | Recurring
 // CampRegistrations tab header (row 1): Timestamp | Parent Name | Email | Primary Phone | Secondary Phone |
 //   Child Name | Date of Birth | Child Age | Health/Medical Info | Emergency Contact Name |
-//   Emergency Contact Relationship | Emergency Contact Phone | Week | Code of Conduct Accepted |
+//   Emergency Contact Relationship | Emergency Contact Phone | Weeks | Code of Conduct Accepted |
 //   Consent Accepted | Registration ID | Paid | Paid At | Confirm Token
+//
+// "Weeks" holds one or more week IDs separated by commas (e.g. "jul06,jul13") —
+// a parent can register one child for multiple weeks in a single submission,
+// filling out their info only once. Capacity and paid-status are still
+// resolved per week vs. per registration row (see /api/camp-capacity and
+// markCampRegistrationPaid below).
 
 const CLINIC_SHEET_TAB = "ClinicSignups";
 const CLINIC_SHEET_RANGE = `${CLINIC_SHEET_TAB}!A:G`;
@@ -53,7 +59,7 @@ export type CampRegistrationRow = {
   emergencyName: string;
   emergencyRelationship: string;
   emergencyPhone: string;
-  week: string;
+  weeks: string;
   codeOfConductAccepted: string;
   consentAccepted: string;
   id: string;
@@ -155,7 +161,7 @@ function mapCampRow(row: string[]): CampRegistrationRow {
     emergencyName: row[9] ?? "",
     emergencyRelationship: row[10] ?? "",
     emergencyPhone: row[11] ?? "",
-    week: row[12] ?? "",
+    weeks: row[12] ?? "",
     codeOfConductAccepted: row[13] ?? "",
     consentAccepted: row[14] ?? "",
     id: row[15] ?? "",
@@ -204,7 +210,7 @@ export async function appendCampRegistration(
           entry.emergencyName,
           entry.emergencyRelationship,
           entry.emergencyPhone,
-          entry.week,
+          entry.weeks,
           entry.codeOfConductAccepted,
           entry.consentAccepted,
           entry.id,

@@ -12,7 +12,7 @@ export async function GET() {
 
     const weeks: Record<string, { taken: number; max: number; remaining: number; full: boolean }> = {};
     for (const week of juniorCamps.weeks) {
-      const taken = registrations.filter((r) => r.week === week.id).length;
+      const taken = registrations.filter((r) => r.weeks.split(",").includes(week.id)).length;
       const remaining = Math.max(juniorCamps.maxPerWeek - taken, 0);
       weeks[week.id] = {
         taken,

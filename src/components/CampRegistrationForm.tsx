@@ -19,7 +19,6 @@ export default function CampRegistrationForm() {
   const searchParams = useSearchParams();
   const [status, setStatus] = useState<Status>("idle");
   const [errorMessage, setErrorMessage] = useState("");
-  const [manualWeek, setManualWeek] = useState<CampWeekId | null>(null);
   const [codeOfConductAccepted, setCodeOfConductAccepted] = useState(false);
   const [consentAccepted, setConsentAccepted] = useState(false);
   const [capacity, setCapacity] = useState<CapacityState>({
@@ -27,6 +26,33 @@ export default function CampRegistrationForm() {
     configured: false,
     weeks: {},
   });
+
+  // A week picked via URL (from the overview tiles) seeds the picker; the
+  // shopper can then add or remove weeks freely — one form, any number of
+  // weeks, info entered only once.
+  const [selectedWeeks, setSelectedWeeks] = useState<Set<CampWeekId>>(() => {
+    const requested = searchParams.get("week");
+    const seed = new Set<CampWeekId>();
+    if (requested && CAMP_WEEK_IDS.has(requested as CampWeekId)) {
+      seed.add(requested as CampWeekId);
+    }
+    return seed;
+  });
+
+  // Filter out any selected week that capacity has since revealed is full
+  // (e.g. it filled up between page load and now) without an extra effect.
+  const effectiveWeeks = Array.from(selectedWeeks).filter((id) => !capacity.weeks[id]?.full);
+  const weekCount = effectiveWeeks.length;
+  const totalPrice = weekCount * juniorCamps.pricePerWeek;
+
+  function toggleWeek(weekId: CampWeekId) {
+    setSelectedWeeks((prev) => {
+      const next = new Set(prev);
+      if (next.has(weekId)) next.delete(weekId);
+      else next.add(weekId);
+      return next;
+    });
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -51,15 +77,6 @@ export default function CampRegistrationForm() {
     };
   }, []);
 
-  // A week picked via URL (from the overview tiles) pre-fills the picker
-  // until the shopper manually picks a different one.
-  const requestedWeek = searchParams.get("week");
-  const urlWeek =
-    requestedWeek && CAMP_WEEK_IDS.has(requestedWeek as CampWeekId) && !capacity.weeks[requestedWeek as CampWeekId]?.full
-      ? (requestedWeek as CampWeekId)
-      : null;
-  const selectedWeek = manualWeek ?? urlWeek;
-
   if (!capacity.loading && !capacity.configured) {
     return (
       <div className="rounded-2xl border border-gold/30 bg-cream p-8 text-center">
@@ -82,9 +99,9 @@ export default function CampRegistrationForm() {
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
-    if (!selectedWeek) {
+    if (weekCount === 0) {
       setStatus("error");
-      setErrorMessage("Please pick a camp week above.");
+      setErrorMessage("Please pick at least one camp week above.");
       return;
     }
     if (!codeOfConductAccepted || !consentAccepted) {
@@ -115,7 +132,7 @@ export default function CampRegistrationForm() {
           emergencyName: formData.get("emergencyName"),
           emergencyRelationship: formData.get("emergencyRelationship"),
           emergencyPhone: formData.get("emergencyPhone"),
-          week: selectedWeek,
+          weeks: effectiveWeeks,
           codeOfConductAccepted,
           consentAccepted,
         }),
@@ -125,7 +142,7 @@ export default function CampRegistrationForm() {
       if (response.ok && result.success) {
         setStatus("success");
         form.reset();
-        setManualWeek(null);
+        setSelectedWeeks(new Set());
         setCodeOfConductAccepted(false);
         setConsentAccepted(false);
       } else {
@@ -145,9 +162,10 @@ export default function CampRegistrationForm() {
           Registration received!
         </p>
         <p className="mt-2 text-ink-soft">
-          A spot is being held for your child. Coach James will review
-          availability and reach out to confirm and arrange payment &mdash;
-          the spot is only secured once payment is received in full.
+          A spot is being held for your child for every week you selected.
+          Coach James will review availability and reach out to confirm and
+          arrange payment &mdash; spots are only secured once payment is
+          received in full.
         </p>
       </div>
     );
@@ -202,25 +220,28 @@ export default function CampRegistrationForm() {
       </div>
 
       <div className="border-t border-gold/20 pt-6">
-        <h3 className="font-display text-lg font-semibold text-forest">Section 3 &mdash; Camp Week</h3>
+        <h3 className="font-display text-lg font-semibold text-forest">Section 3 &mdash; Camp Week(s)</h3>
         <p className="mt-1 text-sm text-ink-soft">
           {juniorCamps.hoursLabel} &mdash; {juniorCamps.hours}, at {locations[juniorCamps.venue].name}.
         </p>
         <p className="text-sm text-ink-soft">{juniorCamps.scheduleNote}</p>
+        <p className="mt-2 text-sm font-semibold text-forest">
+          Select as many weeks as you&apos;d like &mdash; you only need to fill out your information once.
+        </p>
         <div className="mt-4 grid gap-3 sm:grid-cols-2">
           {juniorCamps.weeks.map((week) => {
             const info = capacity.weeks[week.id];
             const full = info?.full ?? false;
-            const selected = selectedWeek === week.id;
+            const selected = effectiveWeeks.includes(week.id);
 
             return (
               <button
                 key={week.id}
                 type="button"
                 disabled={full}
-                onClick={() => setManualWeek(week.id)}
+                onClick={() => toggleWeek(week.id)}
                 aria-pressed={selected}
-                className={`rounded-xl border-2 p-4 text-left transition-colors ${
+                className={`relative rounded-xl border-2 p-4 text-left transition-colors ${
                   full
                     ? "cursor-not-allowed border-gold/20 bg-cream-dark opacity-60"
                     : selected
@@ -228,7 +249,12 @@ export default function CampRegistrationForm() {
                       : "cursor-pointer border-gold/40 bg-white hover:border-forest"
                 }`}
               >
-                <span className="font-display text-base font-semibold">{week.label}</span>
+                {selected && (
+                  <span className="absolute right-3 top-3 flex h-5 w-5 items-center justify-center rounded-full bg-gold text-xs font-bold text-ink">
+                    ✓
+                  </span>
+                )}
+                <span className="font-display text-base font-semibold pr-6">{week.label}</span>
                 <span className={`mt-1 block text-xs ${selected ? "text-cream/80" : "text-ink-soft"}`}>
                   {capacity.loading || !info
                     ? "Checking availability…"
@@ -253,7 +279,9 @@ export default function CampRegistrationForm() {
 
       <div className="rounded-xl bg-cream-dark p-5">
         <p className="font-display text-base font-semibold text-forest">
-          ${juniorCamps.pricePerWeek} {juniorCamps.priceNote} per week
+          {weekCount > 0
+            ? `${weekCount} week${weekCount === 1 ? "" : "s"} selected — $${totalPrice} ${juniorCamps.priceNote}`
+            : `$${juniorCamps.pricePerWeek} ${juniorCamps.priceNote} per week`}
         </p>
         <p className="mt-1 text-sm text-ink-soft">
           Reservations are made on a first-come, first-served basis. Camps fill up quickly.

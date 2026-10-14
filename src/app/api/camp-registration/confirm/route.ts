@@ -55,7 +55,7 @@ export async function GET(request: Request) {
 
   const redirectUrl = new URL("/camp-registration/confirmed", origin);
   redirectUrl.searchParams.set("child", result.row.childName);
-  redirectUrl.searchParams.set("week", result.row.week);
+  redirectUrl.searchParams.set("weeks", result.row.weeks);
   redirectUrl.searchParams.set("email", result.row.email);
   redirectUrl.searchParams.set("already", result.alreadyPaid ? "1" : "0");
   redirectUrl.searchParams.set("emailSent", isEmailConfigured() ? "1" : "0");

@@ -81,10 +81,13 @@ left" counter on the Junior Camps page.
    `Timestamp | First Name | Last Name | Email | Phone | Lesson Date | Lesson Time | Recurring`
 4. Add a third tab named exactly `CampRegistrations`. In row 1, add these
    exact column headers:
-   `Timestamp | Parent Name | Email | Primary Phone | Secondary Phone | Child Name | Date of Birth | Child Age | Health/Medical Info | Emergency Contact Name | Emergency Contact Relationship | Emergency Contact Phone | Week | Code of Conduct Accepted | Consent Accepted | Registration ID | Paid | Paid At | Confirm Token`
-   (The last four columns are filled in automatically by the site — you
-   don't need to touch them. "Paid" flips to `Yes` the moment you click
-   **Mark as Paid** in the notification email described in Step 4 below.)
+   `Timestamp | Parent Name | Email | Primary Phone | Secondary Phone | Child Name | Date of Birth | Child Age | Health/Medical Info | Emergency Contact Name | Emergency Contact Relationship | Emergency Contact Phone | Weeks | Code of Conduct Accepted | Consent Accepted | Registration ID | Paid | Paid At | Confirm Token`
+   (A parent can register one child for several weeks at once — the "Weeks"
+   column lists all of them together, e.g. `jul06,jul13`, rather than one
+   row per week. The last four columns are filled in automatically by the
+   site — you don't need to touch them. "Paid" flips to `Yes` the moment
+   you click **Mark as Paid** in the notification email described in Step
+   4 below, which confirms every week in that registration at once.)
 5. Click **Share** (top right) and share the sheet with the same
    `client_email` address from Step 1, giving it **Editor** access.
 6. Copy the spreadsheet's ID from its URL — it's the long string between
@@ -142,7 +145,9 @@ Once those are set:
 - The **Junior Camps** page automatically shows live spots-remaining per
   week and disables a week once it hits 30 registrations. Each week tile
   on the page is clickable and jumps straight to the registration form
-  with that week pre-selected.
+  with that week pre-selected. Parents can select multiple weeks in that
+  same form — filling out their info once — and the running total price
+  updates live as they add or remove weeks.
 - Every booking, sign-up, or registration appends a row to your sheet — no
   further setup needed.
 - Every camp registration also emails you a **Mark as Paid** link; clicking

@@ -14,11 +14,16 @@ export default async function CampRegistrationConfirmedPage({
 }) {
   const params = await searchParams;
   const child = typeof params.child === "string" ? params.child : "";
-  const weekId = typeof params.week === "string" ? params.week : "";
+  const weeksCsv = typeof params.weeks === "string" ? params.weeks : "";
   const email = typeof params.email === "string" ? params.email : "";
   const alreadyPaid = params.already === "1";
   const emailSent = params.emailSent === "1";
-  const week = juniorCamps.weeks.find((w) => w.id === weekId)?.label ?? weekId;
+  const weekLabels = weeksCsv
+    .split(",")
+    .map((id) => id.trim())
+    .filter(Boolean)
+    .map((id) => juniorCamps.weeks.find((w) => w.id === id)?.label ?? id);
+  const week = weekLabels.join(", ");
 
   return (
     <div className="py-20 sm:py-28">
