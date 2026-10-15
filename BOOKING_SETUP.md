@@ -137,7 +137,38 @@ anyone with it can see campers' contact and health info.
 
 ---
 
-## Send me seven things and I'll wire it all in
+## Step 6: Create the camp registration database (~10 minutes)
+
+Camp registration now runs on its own small database instead of counting
+rows in a spreadsheet — this is what makes the "never more than 30 kids
+in a week" rule hold up even if dozens of parents hit submit at the exact
+same second (tested up to 100 at once; see the readiness report). Without
+this step, the registration form and the live spots-remaining counts on
+the Junior Camps page won't work — everything else on the site (lessons,
+clinics, the rest of the pages) works fine either way.
+
+1. Go to [neon.com](https://neon.com) and sign up (the free tier is
+   plenty for this site's size).
+2. Click **Create a project**. Give it any name (e.g. `golf-website`).
+   For region, pick the one geographically closest to your visitors
+   (e.g. a US East region if nothing in Canada is offered) — flag this
+   choice in the privacy review doc I shared, since it affects where
+   campers' information is physically stored.
+3. Once it's created, go to the project's **Connection Details** and
+   make sure the toggle says **Pooled connection** (not "Direct
+   connection") — this matters for reliability once the site is live;
+   the two look almost identical but only one is correct here.
+4. Copy the connection string — it looks like
+   `postgresql://user:password@ep-something-pooler.region.aws.neon.tech/dbname?sslmode=require`.
+
+Send me that connection string along with the other items below, and
+I'll both add it to the hosting environment and run the one-time setup
+that creates the camp registration tables and the 10 weeks' worth of
+seed data — nothing further for you to do.
+
+---
+
+## Send me eight things and I'll wire it all in
 
 - The `client_email` value from the JSON file (Step 1)
 - The `private_key` value from the JSON file (the whole thing, including
@@ -147,12 +178,13 @@ anyone with it can see campers' contact and health info.
 - Your Gmail address (Step 4)
 - The 16-character App Password (Step 4)
 - Your chosen admin password (Step 5)
+- The database connection string (Step 6)
 
 These get set as private environment variables on the hosting side (never
 committed to the code), matching the names in `.env.local.example` in this
 repo: `GOOGLE_SERVICE_ACCOUNT_CLIENT_EMAIL`, `GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY`,
 `GOOGLE_CALENDAR_ID`, `GOOGLE_SHEETS_SHEET_ID`, `GMAIL_USER`, `GMAIL_APP_PASSWORD`,
-`ADMIN_PASSWORD`.
+`ADMIN_PASSWORD`, `DATABASE_URL`.
 
 Once those are set:
 - The **Book a Lesson** page shows a real month calendar of your actual open
@@ -175,7 +207,10 @@ Once those are set:
 - **yoursite.com/admin/camp-rosters** (behind your admin password) lets
   you download a printable roster workbook any time, one sheet per camp
   week, auto-filled with every current registration — always up to date,
-  no manual copying.
+  no manual copying. The same page also lets you search for a family's
+  registration and cancel it, resend either email, check a camper in,
+  adjust a week's price/capacity/open status, and see a log of every
+  admin action taken.
 
 ---
 
