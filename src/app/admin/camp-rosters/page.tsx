@@ -5,7 +5,10 @@ import Container from "@/components/Container";
 import { business } from "@/lib/content";
 import { isAdminRequestAuthenticated } from "@/lib/adminAuth";
 import { getCampRosterData } from "@/lib/campRoster";
-import { isGoogleSheetsConfigured } from "@/lib/googleSheets";
+import { isDatabaseConfigured } from "@/lib/db";
+import { getCampWeeks } from "@/lib/campDb";
+import AdminCampTools from "@/components/AdminCampTools";
+import AdminWeekEditor from "@/components/AdminWeekEditor";
 
 export const metadata: Metadata = {
   title: `Camp Rosters | ${business.name}`,
@@ -20,8 +23,11 @@ export default async function AdminCampRostersPage() {
     redirect("/admin/login?next=/admin/camp-rosters");
   }
 
-  const configured = isGoogleSheetsConfigured();
+  // Postgres (not Google Sheets) is the authoritative store for camp
+  // registrations — see src/lib/campDb.ts.
+  const configured = isDatabaseConfigured();
   const weekRosters = configured ? await getCampRosterData() : [];
+  const campWeeks = configured ? await getCampWeeks() : [];
   const totalRegistered = weekRosters.reduce((sum, w) => sum + w.rows.length, 0);
 
   return (
@@ -48,7 +54,7 @@ export default async function AdminCampRostersPage() {
           <div className="mt-8 rounded-2xl border border-gold/30 bg-cream p-8 text-center">
             <p className="text-ink-soft">
               Registrations aren&apos;t connected yet, so there&apos;s nothing to pull a live
-              roster from. Once your Google Sheet is set up (see BOOKING_SETUP.md), rosters
+              roster from. Once your database is set up (see BOOKING_SETUP.md), rosters
               will populate here automatically.
             </p>
           </div>
@@ -67,24 +73,8 @@ export default async function AdminCampRostersPage() {
               Download Roster Workbook (.xlsx)
             </a>
 
-            <div className="mt-10 overflow-hidden rounded-2xl border border-gold/30">
-              <table className="w-full text-left text-sm">
-                <thead>
-                  <tr className="bg-cream-dark text-ink-soft">
-                    <th className="px-4 py-3 font-semibold">Week</th>
-                    <th className="px-4 py-3 font-semibold">Registered</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {weekRosters.map((w) => (
-                    <tr key={w.id} className="border-t border-gold/20">
-                      <td className="px-4 py-3 text-ink">{w.label}</td>
-                      <td className="px-4 py-3 text-ink">{w.rows.length} of 30</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <AdminWeekEditor weeks={campWeeks} />
+            <AdminCampTools />
           </>
         )}
 
