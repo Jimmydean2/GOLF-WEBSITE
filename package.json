@@ -8,7 +8,9 @@
     "start": "next start",
     "lint": "eslint",
     "db:migrate": "psql \"$DATABASE_URL\" -f db/migrations/001_init.sql && psql \"$DATABASE_URL\" -f db/migrations/002_seed_weeks.sql",
-    "test:concurrency": "tsx db/tests/concurrency.test.mjs"
+    "test:concurrency": "tsx db/tests/concurrency.test.mjs",
+    "test:xlsx-safety": "tsx db/tests/xlsx-safety.test.mjs",
+    "test": "npm run test:concurrency && npm run test:xlsx-safety"
   },
   "dependencies": {
     "exceljs": "^4.4.0",
