@@ -1,5 +1,6 @@
 import { business, juniorCamps, locations } from "./content";
-import type { CampRegistrationRow } from "./googleSheets";
+import type { RegistrationDetail } from "./campDb";
+import { calculateTotal, formatCents } from "./pricing";
 
 const FOREST = "#1f4a34";
 const GOLD = "#c89b3c";
@@ -23,13 +24,10 @@ function weekLabel(weekId: string): string {
   return juniorCamps.weeks.find((w) => w.id === weekId)?.label ?? weekId;
 }
 
-function parseWeekIds(weeksCsv: string): string[] {
-  return weeksCsv.split(",").map((id) => id.trim()).filter(Boolean);
-}
-
-function weekSummary(weeksCsv: string): { ids: string[]; labels: string[]; total: number } {
-  const ids = parseWeekIds(weeksCsv);
-  return { ids, labels: ids.map(weekLabel), total: ids.length * juniorCamps.pricePerWeek };
+// Short, human-friendly reference derived from the registration's real
+// unique id — easier for a parent to quote over the phone than a full UUID.
+export function confirmationNumber(registrationId: string): string {
+  return registrationId.replace(/-/g, "").slice(0, 8).toUpperCase();
 }
 
 function emailShell(bodyHtml: string): string {
@@ -69,41 +67,73 @@ function listHtml(items: string[]): string {
   </ul>`;
 }
 
+function priceBreakdownRows(subtotalCents: number): [string, string][] {
+  const { gstCents, qstCents, totalCents } = calculateTotal(subtotalCents);
+  return [
+    ["Subtotal", `$${formatCents(subtotalCents)}`],
+    ["GST (5%)", `$${formatCents(gstCents)}`],
+    ["QST (9.975%)", `$${formatCents(qstCents)}`],
+    ["Total", `$${formatCents(totalCents)}`],
+  ];
+}
+
 export function buildCoachNotificationEmail(
-  entry: CampRegistrationRow & { id: string; confirmToken: string },
+  registration: RegistrationDetail,
   confirmUrl: string
 ): { subject: string; html: string; text: string } {
-  const { labels, total } = weekSummary(entry.weeks);
-  const weekCount = labels.length;
-  const weeksDisplay = labels.join(", ");
-  const subject = `New camp registration — ${entry.childName} (${weekCount} week${weekCount === 1 ? "" : "s"})`;
+  const weekLabels = registration.weekIds.map(weekLabel);
+  const weekCount = weekLabels.length;
+  const weeksDisplay = weekLabels.join(", ");
+  const childNames = registration.children.map((c) => c.fullName).join(", ");
+  const subject = `New camp registration — ${childNames} (${registration.children.length} child${registration.children.length === 1 ? "" : "ren"}, ${weekCount} week${weekCount === 1 ? "" : "s"})`;
 
-  const detailsRows: [string, string][] = [
+  const parentRows: [string, string][] = [
     ["Camp week" + (weekCount === 1 ? "" : "s"), weeksDisplay],
-    ["Total due", `$${total} + tax`],
-    ["Parent/guardian", entry.parentName],
-    ["Parent email", entry.email],
-    ["Primary phone", entry.primaryPhone],
-    ["Secondary phone", entry.secondaryPhone || "—"],
-    ["Child's name", entry.childName],
-    ["Date of birth", entry.dateOfBirth],
-    ["Child's age", entry.childAge],
-    ["Health/medical info", entry.healthInfo || "—"],
-    ["Emergency contact", `${entry.emergencyName} (${entry.emergencyRelationship}) — ${entry.emergencyPhone}`],
+    ["Parent/guardian", registration.parentName],
+    ["Parent email", registration.email],
+    ["Primary phone", registration.primaryPhone],
+    ["Secondary phone", registration.secondaryPhone || "—"],
+    [
+      "Emergency contact",
+      `${registration.emergencyName} (${registration.emergencyRelationship}) — ${registration.emergencyPhone}`,
+    ],
   ];
 
-  const detailsHtml = detailsRows
+  const childRows = registration.children
+    .map(
+      (child, i) => `
+    <tr><td colspan="2" style="padding:12px 0 4px; font-size:13px; font-weight:700; color:${FOREST};">Child ${i + 1}</td></tr>
+    <tr><td style="padding:4px 0; font-size:13px; color:${INK_SOFT}; width:40%; vertical-align:top;">${escapeHtml("Full name")}</td><td style="padding:4px 0; font-size:13px; color:#1b1b16; font-weight:600;">${escapeHtml(child.fullName)}</td></tr>
+    <tr><td style="padding:4px 0; font-size:13px; color:${INK_SOFT}; vertical-align:top;">${escapeHtml("Date of birth")}</td><td style="padding:4px 0; font-size:13px; color:#1b1b16; font-weight:600;">${escapeHtml(child.dateOfBirth)}</td></tr>
+    <tr><td style="padding:4px 0; font-size:13px; color:${INK_SOFT}; vertical-align:top;">${escapeHtml("Age")}</td><td style="padding:4px 0; font-size:13px; color:#1b1b16; font-weight:600;">${escapeHtml(child.age)}</td></tr>
+    <tr><td style="padding:4px 0; font-size:13px; color:${INK_SOFT}; vertical-align:top;">${escapeHtml("Health/medical info")}</td><td style="padding:4px 0; font-size:13px; color:#1b1b16; font-weight:600;">${escapeHtml(child.healthInfo || "—")}</td></tr>`
+    )
+    .join("\n");
+
+  const parentRowsHtml = parentRows
     .map(
       ([label, value]) =>
         `<tr><td style="padding:6px 0; font-size:13px; color:${INK_SOFT}; width:40%; vertical-align:top;">${escapeHtml(label)}</td><td style="padding:6px 0; font-size:13px; color:#1b1b16; font-weight:600; vertical-align:top;">${escapeHtml(value)}</td></tr>`
     )
     .join("\n");
 
+  const priceRowsHtml = priceBreakdownRows(registration.totalPriceCents)
+    .map(
+      ([label, value]) =>
+        `<tr><td style="padding:3px 0; font-size:13px; color:${INK_SOFT};">${label}</td><td style="padding:3px 0; font-size:13px; color:#1b1b16; font-weight:700; text-align:right;">${value}</td></tr>`
+    )
+    .join("\n");
+
   const html = emailShell(`
-    <p style="margin:0 0 16px; font-family:Georgia,'Times New Roman',serif; font-size:20px; font-weight:bold; color:${FOREST};">New Junior Camp registration</p>
-    <p style="margin:0 0 20px; font-size:14px; color:${INK_SOFT}; line-height:1.6;">A new registration came in for <strong>${weeksDisplay}</strong>. Review the details below, and once you've received the e-transfer for the full amount, click the button to confirm ${weekCount === 1 ? "the spot" : "all spots"} and automatically send the parent their full confirmation email.</p>
-    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:24px;">
-      ${detailsHtml}
+    <p style="margin:0 0 4px; font-family:Georgia,'Times New Roman',serif; font-size:20px; font-weight:bold; color:${FOREST};">New Junior Camp registration</p>
+    <p style="margin:0 0 20px; font-size:12px; color:${INK_SOFT};">Confirmation #${confirmationNumber(registration.id)}</p>
+    <p style="margin:0 0 20px; font-size:14px; color:${INK_SOFT}; line-height:1.6;">A new registration came in for <strong>${weeksDisplay}</strong> (${registration.children.length} child${registration.children.length === 1 ? "" : "ren"}). Review the details below, and once you've received the e-transfer for the full amount, click the button to confirm ${weekCount === 1 ? "the spot" : "all spots"} and automatically send the parent their full confirmation email.</p>
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:16px;">
+      ${parentRowsHtml}
+      ${childRows}
+    </table>
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:24px; border-top:1px solid ${BORDER}; padding-top:8px;">
+      ${priceRowsHtml}
     </table>
     <table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 auto;">
       <tr>
@@ -116,8 +146,20 @@ export function buildCoachNotificationEmail(
   `);
 
   const text = `New Junior Camp registration — ${weeksDisplay}
+Confirmation #${confirmationNumber(registration.id)}
 
-${detailsRows.map(([label, value]) => `${label}: ${value}`).join("\n")}
+${parentRows.map(([label, value]) => `${label}: ${value}`).join("\n")}
+
+${registration.children
+  .map(
+    (c, i) =>
+      `Child ${i + 1}: ${c.fullName} (DOB ${c.dateOfBirth}, age ${c.age}) — Health/medical: ${c.healthInfo || "—"}`
+  )
+  .join("\n")}
+
+${priceBreakdownRows(registration.totalPriceCents)
+  .map(([label, value]) => `${label}: ${value}`)
+  .join("\n")}
 
 Once payment is received, confirm it here:
 ${confirmUrl}`;
@@ -125,35 +167,48 @@ ${confirmUrl}`;
   return { subject, html, text };
 }
 
-export function buildParentConfirmationEmail(entry: CampRegistrationRow): {
+export function buildParentConfirmationEmail(registration: RegistrationDetail): {
   subject: string;
   html: string;
   text: string;
 } {
-  const { labels, total } = weekSummary(entry.weeks);
-  const weekCount = labels.length;
-  const datesHtml = labels.map((l) => `<span style="display:block;">${l}</span>`).join("");
-  const datesText = labels.join("\n");
+  const weekLabels = registration.weekIds.map(weekLabel);
+  const weekCount = weekLabels.length;
+  const datesHtml = weekLabels.map((l) => `<span style="display:block;">${l}</span>`).join("");
+  const datesText = weekLabels.join("\n");
   const venue = locations[juniorCamps.venue];
-  const firstName = entry.parentName.split(" ")[0] || entry.parentName;
-  const subject = `You're confirmed! ${entry.childName}'s spot at ${business.name} Junior Camp`;
+  const firstName = registration.parentName.split(" ")[0] || registration.parentName;
+  const childNames = registration.children.map((c) => c.fullName).join(", ");
+  const subject = `You're confirmed! ${childNames}'s spot at ${business.name} Junior Camp`;
   const safeFirstName = escapeHtml(firstName);
-  const safeChildName = escapeHtml(entry.childName);
+  const safeChildNames = escapeHtml(childNames);
+  const confNumber = confirmationNumber(registration.id);
+
+  const priceRowsHtml = priceBreakdownRows(registration.totalPriceCents)
+    .map(
+      ([label, value]) =>
+        `<tr><td style="padding:3px 0; font-size:13px; color:${INK_SOFT};">${label}</td><td style="padding:3px 0; font-size:13px; color:#1b1b16; font-weight:700; text-align:right;">${value}</td></tr>`
+    )
+    .join("\n");
 
   const html = emailShell(`
     <p style="margin:0 0 16px; font-family:Georgia,'Times New Roman',serif; font-size:22px; font-weight:bold; color:${FOREST};">Thank you — you're all set!</p>
     <p style="margin:0 0 16px; font-size:14px; color:${INK_SOFT}; line-height:1.6;">Hi ${safeFirstName},</p>
     <p style="margin:0 0 20px; font-size:14px; color:${INK_SOFT}; line-height:1.6;">
-      Payment has been received and <strong>${safeChildName}'s</strong> spot${weekCount === 1 ? " is" : "s are"} now confirmed for Junior Camp. We can't wait to see them on the course! Here's everything you need for camp day.
+      Payment has been received and <strong>${safeChildNames}'s</strong> spot${weekCount === 1 && registration.children.length === 1 ? " is" : "s are"} now confirmed for Junior Camp at Golf Dorval. We can't wait to see ${registration.children.length === 1 ? "them" : "everyone"} on the course! Here's everything you need for camp day.
     </p>
 
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 20px; border:1px solid ${BORDER}; border-radius:12px;">
       <tr>
         <td style="padding:16px 20px;">
+          <p style="margin:0 0 4px; font-size:12px; letter-spacing:0.08em; text-transform:uppercase; color:${GOLD}; font-weight:bold;">Confirmation Number</p>
+          <p style="margin:0 0 10px; font-size:14px; color:#1b1b16; font-weight:700;">#${confNumber}</p>
+          <p style="margin:0 0 4px; font-size:12px; letter-spacing:0.08em; text-transform:uppercase; color:${GOLD}; font-weight:bold;">Children</p>
+          <p style="margin:0 0 10px; font-size:14px; color:#1b1b16;">${safeChildNames}</p>
           <p style="margin:0 0 4px; font-size:12px; letter-spacing:0.08em; text-transform:uppercase; color:${GOLD}; font-weight:bold;">Confirmed Week${weekCount === 1 ? "" : "s"}</p>
           <div style="margin:0 0 10px; font-size:16px; font-weight:bold; color:${FOREST};">${datesHtml}</div>
-          <p style="margin:0 0 4px; font-size:12px; letter-spacing:0.08em; text-transform:uppercase; color:${GOLD}; font-weight:bold;">Total Paid</p>
-          <p style="margin:0 0 10px; font-size:14px; color:#1b1b16;">$${total} + tax (${weekCount} week${weekCount === 1 ? "" : "s"} &times; $${juniorCamps.pricePerWeek})</p>
+          <p style="margin:0 0 4px; font-size:12px; letter-spacing:0.08em; text-transform:uppercase; color:${GOLD}; font-weight:bold;">Amount Paid</p>
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 10px;">${priceRowsHtml}</table>
           <p style="margin:0 0 4px; font-size:12px; letter-spacing:0.08em; text-transform:uppercase; color:${GOLD}; font-weight:bold;">Hours</p>
           <p style="margin:0 0 10px; font-size:14px; color:#1b1b16;">${juniorCamps.hours}</p>
           <p style="margin:0 0 4px; font-size:12px; letter-spacing:0.08em; text-transform:uppercase; color:${GOLD}; font-weight:bold;">Location</p>
@@ -186,12 +241,17 @@ export function buildParentConfirmationEmail(entry: CampRegistrationRow): {
 
 Hi ${firstName},
 
-Payment has been received and ${entry.childName}'s spot${weekCount === 1 ? " is" : "s are"} confirmed for Junior Camp.
+Payment has been received and ${childNames}'s spot${weekCount === 1 && registration.children.length === 1 ? " is" : "s are"} confirmed for Junior Camp at Golf Dorval.
+
+CONFIRMATION NUMBER: #${confNumber}
 
 CONFIRMED WEEK${weekCount === 1 ? "" : "S"}:
 ${datesText}
 
-TOTAL PAID: $${total} + tax (${weekCount} week${weekCount === 1 ? "" : "s"} x $${juniorCamps.pricePerWeek})
+${priceBreakdownRows(registration.totalPriceCents)
+  .map(([label, value]) => `${label}: ${value}`)
+  .join("\n")}
+
 HOURS: ${juniorCamps.hours}
 LOCATION: ${venue.name}, ${venue.address}
 

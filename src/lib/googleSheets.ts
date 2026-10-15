@@ -2,8 +2,13 @@ import { google } from "googleapis";
 import { getGoogleAuth, isGoogleServiceAccountConfigured } from "./googleAuth";
 
 // Server-only. Reads/writes tabs of a Google Sheet via the shared service
-// account. This is the client "data bank" for both clinic sign-ups and
-// individual lesson bookings. See BOOKING_SETUP.md.
+// account. This is the client "data bank" for clinic sign-ups and
+// individual lesson bookings — both still authoritative here. Junior Camp
+// registrations are different: Postgres (src/lib/campDb.ts) is the
+// authoritative store for capacity and registration data, and
+// CampRegistrations below is a write-only, best-effort reporting copy —
+// nothing ever reads it back to make a capacity or payment decision. See
+// BOOKING_SETUP.md.
 //
 // ClinicSignups tab header (row 1): Timestamp | First Name | Last Name | Email | Phone | Cohort | Message
 // LessonBookings tab header (row 1): Timestamp | First Name | Last Name | Email | Phone | Lesson Date | Lesson Time | Recurring
@@ -12,11 +17,10 @@ import { getGoogleAuth, isGoogleServiceAccountConfigured } from "./googleAuth";
 //   Emergency Contact Relationship | Emergency Contact Phone | Weeks | Code of Conduct Accepted |
 //   Consent Accepted | Registration ID | Paid | Paid At | Confirm Token
 //
-// "Weeks" holds one or more week IDs separated by commas (e.g. "jul06,jul13") —
-// a parent can register one child for multiple weeks in a single submission,
-// filling out their info only once. Capacity and paid-status are still
-// resolved per week vs. per registration row (see /api/camp-capacity and
-// markCampRegistrationPaid below).
+// "Weeks" holds one or more week IDs separated by commas (e.g. "jul06,jul13").
+// One row is appended per child (a family registering 3 kids for a week
+// produces 3 rows, all sharing the same Registration ID) — matching how
+// the roster and "each child counts as one spot" model work in Postgres.
 
 const CLINIC_SHEET_TAB = "ClinicSignups";
 const CLINIC_SHEET_RANGE = `${CLINIC_SHEET_TAB}!A:G`;
@@ -147,44 +151,6 @@ export async function appendLessonBooking(entry: Omit<LessonBookingRow, "timesta
   });
 }
 
-function mapCampRow(row: string[]): CampRegistrationRow {
-  return {
-    timestamp: row[0] ?? "",
-    parentName: row[1] ?? "",
-    email: row[2] ?? "",
-    primaryPhone: row[3] ?? "",
-    secondaryPhone: row[4] ?? "",
-    childName: row[5] ?? "",
-    dateOfBirth: row[6] ?? "",
-    childAge: row[7] ?? "",
-    healthInfo: row[8] ?? "",
-    emergencyName: row[9] ?? "",
-    emergencyRelationship: row[10] ?? "",
-    emergencyPhone: row[11] ?? "",
-    weeks: row[12] ?? "",
-    codeOfConductAccepted: row[13] ?? "",
-    consentAccepted: row[14] ?? "",
-    id: row[15] ?? "",
-    paid: row[16] ?? "",
-    paidAt: row[17] ?? "",
-    confirmToken: row[18] ?? "",
-  };
-}
-
-export async function getCampRegistrations(): Promise<CampRegistrationRow[]> {
-  const sheets = getSheetsClient();
-  const spreadsheetId = process.env.GOOGLE_SHEETS_SHEET_ID!;
-
-  const { data } = await sheets.spreadsheets.values.get({
-    spreadsheetId,
-    range: CAMP_SHEET_RANGE,
-  });
-
-  const rows = data.values ?? [];
-  // Skip the header row.
-  return rows.slice(1).map(mapCampRow);
-}
-
 export async function appendCampRegistration(
   entry: Omit<CampRegistrationRow, "timestamp" | "paid" | "paidAt">
 ): Promise<void> {
@@ -221,45 +187,4 @@ export async function appendCampRegistration(
       ],
     },
   });
-}
-
-// Looks up a registration by its ID + confirm token (from the "Mark as
-// Paid" link in the coach's notification email), and — unless it's already
-// been marked paid — writes "Yes" + a timestamp into the Paid/Paid At
-// columns. Returns null if the id/token pair doesn't match any row (an
-// invalid or tampered link).
-export async function markCampRegistrationPaid(
-  id: string,
-  token: string
-): Promise<{ row: CampRegistrationRow; alreadyPaid: boolean } | null> {
-  const sheets = getSheetsClient();
-  const spreadsheetId = process.env.GOOGLE_SHEETS_SHEET_ID!;
-
-  const { data } = await sheets.spreadsheets.values.get({
-    spreadsheetId,
-    range: CAMP_SHEET_RANGE,
-  });
-
-  const rows = data.values ?? [];
-  const dataRows = rows.slice(1);
-  const index = dataRows.findIndex((row) => row[15] === id && row[18] === token);
-  if (index === -1) return null;
-
-  const row = dataRows[index];
-  if (row[16] === "Yes") {
-    return { row: mapCampRow(row), alreadyPaid: true };
-  }
-
-  const sheetRowNumber = index + 2; // +1 for the header row, +1 to convert to 1-indexed
-  const paidAt = new Date().toISOString();
-  await sheets.spreadsheets.values.update({
-    spreadsheetId,
-    range: `${CAMP_SHEET_TAB}!Q${sheetRowNumber}:R${sheetRowNumber}`,
-    valueInputOption: "RAW",
-    requestBody: { values: [["Yes", paidAt]] },
-  });
-
-  row[16] = "Yes";
-  row[17] = paidAt;
-  return { row: mapCampRow(row), alreadyPaid: false };
 }

@@ -1,6 +1,6 @@
 import ExcelJS from "exceljs";
 import { business, juniorCamps, locations } from "./content";
-import { getCampRegistrations } from "./googleSheets";
+import { getWeekRoster } from "./campDb";
 
 // Server-only. Builds the printable Junior Camp roster workbook straight
 // from live registration data — one sheet per camp week, 30 rows each,
@@ -29,10 +29,12 @@ const HEADERS = [
   "Emergency Phone",
   "Allergies / Medical Notes",
   "Paid (Y/N)",
+  "Checked In",
 ];
-const COL_WIDTHS = [4, 24, 6, 24, 15, 15, 32, 15, 32, 10];
+const COL_WIDTHS = [4, 24, 6, 24, 15, 15, 32, 15, 32, 10, 14];
 
 export type RosterRow = {
+  spotId: string;
   childName: string;
   childAge: string;
   parentName: string;
@@ -42,6 +44,8 @@ export type RosterRow = {
   emergencyPhone: string;
   healthInfo: string;
   paid: "Y" | "N";
+  checkedIn: "Y" | "N";
+  checkedInAt: string | null;
 };
 
 export type WeekRoster = {
@@ -50,27 +54,36 @@ export type WeekRoster = {
   rows: RosterRow[];
 };
 
+// Postgres (src/lib/campDb.ts) is the authoritative source — the same
+// data the capacity counter is built from, so a roster for a week that's
+// hit 30 confirmed children always contains exactly those 30, no matter
+// what Google Sheets (a write-only reporting copy) happens to show.
 export async function getCampRosterData(): Promise<WeekRoster[]> {
-  const registrations = await getCampRegistrations();
-
-  return juniorCamps.weeks.map((week) => {
-    const rows: RosterRow[] = registrations
-      .filter((r) => r.weeks.split(",").map((w) => w.trim()).includes(week.id))
-      .map((r) => ({
-        childName: r.childName,
-        childAge: r.childAge,
-        parentName: r.parentName,
-        primaryPhone: r.primaryPhone,
-        secondaryPhone: r.secondaryPhone,
-        emergencyContact: r.emergencyRelationship
-          ? `${r.emergencyName} (${r.emergencyRelationship})`
-          : r.emergencyName,
-        emergencyPhone: r.emergencyPhone,
-        healthInfo: r.healthInfo,
-        paid: r.paid === "Yes" ? "Y" : "N",
+  const weekRosters: WeekRoster[] = [];
+  for (const week of juniorCamps.weeks) {
+    const spots = await getWeekRoster(week.id);
+    const rows: RosterRow[] = spots
+      .filter((s) => s.status !== "cancelled")
+      .sort((a, b) => a.childName.localeCompare(b.childName))
+      .map((s) => ({
+        spotId: s.spotId,
+        childName: s.childName,
+        childAge: s.age,
+        parentName: s.parentName,
+        primaryPhone: s.primaryPhone,
+        secondaryPhone: s.secondaryPhone,
+        emergencyContact: s.emergencyRelationship
+          ? `${s.emergencyName} (${s.emergencyRelationship})`
+          : s.emergencyName,
+        emergencyPhone: s.emergencyPhone,
+        healthInfo: s.healthInfo,
+        paid: s.status === "paid" ? "Y" : "N",
+        checkedIn: s.checkedInAt ? "Y" : "N",
+        checkedInAt: s.checkedInAt,
       }));
-    return { id: week.id, label: week.label, rows };
-  });
+    weekRosters.push({ id: week.id, label: week.label, rows });
+  }
+  return weekRosters;
 }
 
 function border(ws: ExcelJS.Worksheet, cell: ExcelJS.Cell) {
@@ -130,7 +143,7 @@ function buildWeekSheet(wb: ExcelJS.Workbook, tabName: string, weekRoster: WeekR
     cell.value = header;
     cell.font = { name: "Arial", size: 10, bold: true, color: { argb: WHITE } };
     cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: FOREST } };
-    cell.alignment = { horizontal: [1, 3, 10].includes(i + 1) ? "center" : "left", vertical: "middle", wrapText: true };
+    cell.alignment = { horizontal: [1, 3, 10, 11].includes(i + 1) ? "center" : "left", vertical: "middle", wrapText: true };
     border(ws, cell);
   });
 
@@ -152,6 +165,7 @@ function buildWeekSheet(wb: ExcelJS.Workbook, tabName: string, weekRoster: WeekR
       registrant?.emergencyPhone ?? "",
       registrant?.healthInfo ?? "",
       registrant?.paid ?? "",
+      registrant?.checkedIn ?? "",
     ];
 
     values.forEach((value, colIdx) => {
@@ -160,7 +174,7 @@ function buildWeekSheet(wb: ExcelJS.Workbook, tabName: string, weekRoster: WeekR
       cell.font = { name: "Arial", size: 10, color: { argb: INK } };
       cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: fillColor } };
       cell.alignment = {
-        horizontal: [1, 3, 10].includes(colIdx + 1) ? "center" : "left",
+        horizontal: [1, 3, 10, 11].includes(colIdx + 1) ? "center" : "left",
         vertical: "middle",
         wrapText: colIdx + 1 === 9,
       };

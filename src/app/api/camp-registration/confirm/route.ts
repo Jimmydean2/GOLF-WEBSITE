@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { isEmailConfigured, sendEmail } from "@/lib/email";
 import { buildParentConfirmationEmail } from "@/lib/campEmailTemplates";
-import { isGoogleSheetsConfigured, markCampRegistrationPaid } from "@/lib/googleSheets";
+import { isDatabaseConfigured } from "@/lib/db";
+import { markRegistrationPaid } from "@/lib/campDb";
 
 function errorPage(message: string): NextResponse {
   const html = `<!doctype html>
@@ -16,28 +17,28 @@ function errorPage(message: string): NextResponse {
 
 // GET /api/camp-registration/confirm?id=...&token=...
 // The "Mark as Paid & Send Confirmation" link from the coach's new-registration
-// email. Marks the registration paid (idempotent — a repeat click is a no-op)
-// and sends the parent their camp-day confirmation email, then redirects to a
-// plain on-brand confirmation screen.
+// email. Marks the registration paid (idempotent — a repeat click, or a
+// duplicated notification, is a no-op) and sends the parent their camp-day
+// confirmation email, then redirects to a plain on-brand confirmation screen.
 export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url);
   const id = searchParams.get("id") ?? "";
   const token = searchParams.get("token") ?? "";
 
   if (!id || !token) {
-    return errorPage("This confirmation link is missing information. Please check the Google Sheet directly.");
+    return errorPage("This confirmation link is missing information. Please check the admin dashboard directly.");
   }
 
-  if (!isGoogleSheetsConfigured()) {
+  if (!isDatabaseConfigured()) {
     return errorPage("Registrations aren't connected yet. Please check with the site admin.");
   }
 
   let result;
   try {
-    result = await markCampRegistrationPaid(id, token);
+    result = await markRegistrationPaid(id, token);
   } catch (err) {
     console.error("Failed to mark camp registration paid:", err);
-    return errorPage("Something went wrong reaching the registration sheet. Please try again.");
+    return errorPage("Something went wrong reaching the registration database. Please try again.");
   }
 
   if (!result) {
@@ -46,17 +47,18 @@ export async function GET(request: Request) {
 
   if (!result.alreadyPaid && isEmailConfigured()) {
     try {
-      const { subject, html, text } = buildParentConfirmationEmail(result.row);
-      await sendEmail({ to: result.row.email, subject, html, text });
+      const { subject, html, text } = buildParentConfirmationEmail(result.registration);
+      await sendEmail({ to: result.registration.email, subject, html, text });
     } catch (err) {
       console.error("Failed to send parent confirmation email:", err);
     }
   }
 
+  const childNames = result.registration.children.map((c) => c.fullName).join(", ");
   const redirectUrl = new URL("/camp-registration/confirmed", origin);
-  redirectUrl.searchParams.set("child", result.row.childName);
-  redirectUrl.searchParams.set("weeks", result.row.weeks);
-  redirectUrl.searchParams.set("email", result.row.email);
+  redirectUrl.searchParams.set("child", childNames);
+  redirectUrl.searchParams.set("weeks", result.registration.weekIds.join(","));
+  redirectUrl.searchParams.set("email", result.registration.email);
   redirectUrl.searchParams.set("already", result.alreadyPaid ? "1" : "0");
   redirectUrl.searchParams.set("emailSent", isEmailConfigured() ? "1" : "0");
   return NextResponse.redirect(redirectUrl);

@@ -1,29 +1,38 @@
 import { NextResponse } from "next/server";
-import { juniorCamps } from "@/lib/content";
-import { getCampRegistrations, isGoogleSheetsConfigured } from "@/lib/googleSheets";
+import { isDatabaseConfigured } from "@/lib/db";
+import { getCampWeeks } from "@/lib/campDb";
 
+// Capacity now comes from Postgres (the authoritative store — see
+// src/lib/campDb.ts), not Google Sheets. Price-per-week and open/closed
+// state are included here too, since both are admin-configurable in the
+// database rather than hardcoded.
 export async function GET() {
-  if (!isGoogleSheetsConfigured()) {
+  if (!isDatabaseConfigured()) {
     return NextResponse.json({ configured: false, weeks: {} });
   }
 
   try {
-    const registrations = await getCampRegistrations();
+    const campWeeks = await getCampWeeks();
 
-    const weeks: Record<string, { taken: number; max: number; remaining: number; full: boolean }> = {};
-    for (const week of juniorCamps.weeks) {
-      const taken = registrations.filter((r) => r.weeks.split(",").includes(week.id)).length;
-      const remaining = Math.max(juniorCamps.maxPerWeek - taken, 0);
+    const weeks: Record<
+      string,
+      { taken: number; max: number; remaining: number; full: boolean; priceCents: number; isOpen: boolean }
+    > = {};
+    for (const week of campWeeks) {
+      const remaining = Math.max(week.maxCapacity - week.takenCount, 0);
       weeks[week.id] = {
-        taken,
-        max: juniorCamps.maxPerWeek,
+        taken: week.takenCount,
+        max: week.maxCapacity,
         remaining,
-        full: remaining === 0,
+        full: remaining === 0 || !week.isOpen,
+        priceCents: week.priceCents,
+        isOpen: week.isOpen,
       };
     }
 
     return NextResponse.json({ configured: true, weeks });
-  } catch {
+  } catch (err) {
+    console.error("Failed to read camp capacity:", err);
     return NextResponse.json(
       { configured: true, weeks: {}, error: "Could not read capacity right now." },
       { status: 502 }
