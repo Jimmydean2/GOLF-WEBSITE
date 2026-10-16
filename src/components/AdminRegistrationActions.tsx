@@ -210,6 +210,7 @@ function ReleaseModal({ target, onClose, onDone }: { target: ActionTarget; onClo
   const reported = target.status === "payment_reported";
   const [notReceived, setNotReceived] = useState(reported || target.status === "pending_payment");
   const [reason, setReason] = useState("");
+  const [notifyParent, setNotifyParent] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const paid = target.status === "paid";
@@ -218,7 +219,7 @@ function ReleaseModal({ target, onClose, onDone }: { target: ActionTarget; onClo
     event.preventDefault();
     setBusy(true);
     setError("");
-    const result = await call(`/api/admin/camp-registrations/${target.id}/cancel`, { reason, notReceived: notReceived && !paid });
+    const result = await call(`/api/admin/camp-registrations/${target.id}/cancel`, { reason, notReceived: notReceived && !paid, notifyParent });
     setBusy(false);
     if (result.ok && result.data.success) onDone(`${target.reference} released. Spots freed: ${(result.data.releasedWeekIds as string[]).join(", ") || "none"}.`);
     else setError(String(result.data.error ?? "Could not release. Nothing was changed."));
@@ -242,6 +243,15 @@ function ReleaseModal({ target, onClose, onDone }: { target: ActionTarget; onClo
         <label className="block text-sm font-medium text-ink">
           Note for the log
           <input className={`${INPUT} mt-1`} value={reason} onChange={(e) => setReason(e.target.value)} placeholder={paid ? "e.g. parent asked to cancel" : "e.g. no deposit found, parent contacted"} />
+        </label>
+        <label className="flex items-start gap-2 text-sm font-medium text-ink">
+          <input type="checkbox" className="mt-1" checked={notifyParent} onChange={(e) => setNotifyParent(e.target.checked)} />
+          <span>
+            Email the family a notice (in their language).
+            <span className="block text-xs font-normal text-ink-soft">
+              Untick it if you have already spoken to them. The notice never mentions your note.
+            </span>
+          </span>
         </label>
         {error && (
           <p role="alert" className="text-sm text-flag">

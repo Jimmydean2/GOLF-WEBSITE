@@ -2,10 +2,13 @@
 
 import { FormEvent, useEffect, useId, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { business, juniorCamps, locations, type CampWeekId } from "@/lib/content";
-import { calculateTotal, formatCents } from "@/lib/pricing";
-import { formatMontreal } from "@/lib/payment";
+import { business, juniorCamps, type CampWeekId } from "@/lib/content";
+import { calculateTotal } from "@/lib/pricing";
+import { formatMontrealLong, getMessages } from "@/lib/i18n";
+import { weekLabel } from "@/lib/season";
+import type { Lang } from "@/lib/lang";
 import type { RegistrationWindow } from "@/lib/registrationWindow";
+import Rich from "@/components/Rich";
 
 const CAMP_WEEK_IDS = new Set(juniorCamps.weeks.map((week) => week.id));
 
@@ -27,7 +30,9 @@ function newChild(): ChildEntry {
   return { key: crypto.randomUUID(), fullName: "", dateOfBirth: "", age: "", healthInfo: "" };
 }
 
-export default function CampRegistrationForm() {
+export default function CampRegistrationForm({ lang }: { lang: Lang }) {
+  const m = getMessages(lang);
+  const f = m.form;
   const searchParams = useSearchParams();
   const router = useRouter();
   const [status, setStatus] = useState<Status>("idle");
@@ -141,19 +146,23 @@ export default function CampRegistrationForm() {
     return () => clearTimeout(timer);
   }, [opensAt, serverNow]);
 
+  const contactBlock = (
+    <div className="mt-4 flex flex-col items-center gap-1">
+      <a href={business.phoneHref} className="font-semibold text-forest hover:underline">
+        {business.phone}
+      </a>
+      <a href={`mailto:${business.email}`} className="font-semibold text-forest hover:underline">
+        {business.email}
+      </a>
+    </div>
+  );
+
   if (!capacity.loading && capacity.registration?.state === "not_announced") {
     return (
       <div className="rounded-2xl border border-gold/30 bg-cream p-8 text-center">
-        <p className="font-display text-lg font-semibold text-forest">{juniorCamps.year} camp registration isn&apos;t open yet.</p>
-        <p className="mt-2 text-ink-soft">The {juniorCamps.year} camp dates will be announced soon. Questions? Call or email us:</p>
-        <div className="mt-4 flex flex-col items-center gap-1">
-          <a href={business.phoneHref} className="font-semibold text-forest hover:underline">
-            {business.phone}
-          </a>
-          <a href={`mailto:${business.email}`} className="font-semibold text-forest hover:underline">
-            {business.email}
-          </a>
-        </div>
+        <p className="font-display text-lg font-semibold text-forest">{f.notAnnouncedTitle(juniorCamps.year)}</p>
+        <p className="mt-2 text-ink-soft">{f.notAnnouncedBody(juniorCamps.year)}</p>
+        {contactBlock}
       </div>
     );
   }
@@ -161,18 +170,8 @@ export default function CampRegistrationForm() {
   if (!capacity.loading && !capacity.configured) {
     return (
       <div className="rounded-2xl border border-gold/30 bg-cream p-8 text-center">
-        <p className="text-ink-soft">
-          Online registration is being finalized. In the meantime, reserve a
-          spot by calling or emailing directly:
-        </p>
-        <div className="mt-4 flex flex-col items-center gap-1">
-          <a href={business.phoneHref} className="font-semibold text-forest hover:underline">
-            {business.phone}
-          </a>
-          <a href={`mailto:${business.email}`} className="font-semibold text-forest hover:underline">
-            {business.email}
-          </a>
-        </div>
+        <p className="text-ink-soft">{f.notConnected}</p>
+        {contactBlock}
       </div>
     );
   }
@@ -182,17 +181,17 @@ export default function CampRegistrationForm() {
 
     if (weekCount === 0) {
       setStatus("error");
-      setErrorMessage("Please pick at least one camp week above.");
+      setErrorMessage(f.pickWeekFirst);
       return;
     }
     if (children.some((c) => !c.fullName.trim() || !c.dateOfBirth.trim() || !c.age.trim() || !c.healthInfo.trim())) {
       setStatus("error");
-      setErrorMessage("Please fill in every field for each child.");
+      setErrorMessage(f.fillEveryField);
       return;
     }
     if (!codeOfConductAccepted || !consentAccepted) {
       setStatus("error");
-      setErrorMessage("Please accept the code of conduct and information consent below.");
+      setErrorMessage(f.acceptBoth);
       return;
     }
 
@@ -208,6 +207,7 @@ export default function CampRegistrationForm() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           idempotencyKey,
+          language: lang,
           parentName: formData.get("parentName"),
           email: formData.get("email"),
           primaryPhone: formData.get("primaryPhone"),
@@ -250,27 +250,21 @@ export default function CampRegistrationForm() {
         setIdempotencyKey(crypto.randomUUID());
       } else {
         setStatus("error");
-        setErrorMessage(result.error || "Something went wrong. Please try again.");
+        setErrorMessage(result.error || f.somethingWrong);
       }
     } catch {
       setStatus("error");
-      setErrorMessage("Something went wrong. Please try again.");
+      setErrorMessage(f.somethingWrong);
     }
   }
 
   if (status === "success") {
     return (
       <div className="rounded-2xl border border-gold/30 bg-cream p-8 text-center">
-        <p className="font-display text-xl font-semibold text-forest">
-          Registration received!
-        </p>
-        <p className="mt-2 text-ink-soft">
-          A spot is being held for {submittedChildCount === 1 ? "your child" : `each of your ${submittedChildCount} children`} for every week you selected.
-          Please check your email for your payment instructions and reference &mdash; spots are only secured once
-          payment is received in full.
-        </p>
+        <p className="font-display text-xl font-semibold text-forest">{f.successTitle}</p>
+        <p className="mt-2 text-ink-soft">{f.successBody(submittedChildCount)}</p>
         <p className="mt-4 rounded-xl bg-cream-dark px-4 py-3 font-display text-base font-semibold text-forest">
-          Total due: {submittedChildCount} child{submittedChildCount === 1 ? "" : "ren"} &times; {submittedWeekCount} week{submittedWeekCount === 1 ? "" : "s"} = ${formatCents(submittedTotalCents)} (tax included)
+          {f.successTotal(submittedChildCount, submittedWeekCount, submittedTotalCents)}
         </p>
       </div>
     );
@@ -280,65 +274,59 @@ export default function CampRegistrationForm() {
     <form onSubmit={handleSubmit} className="space-y-8 rounded-2xl border border-gold/30 bg-cream p-8">
       {opensAt && (
         <div role="status" className="rounded-xl border border-gold/40 bg-white p-4 text-sm text-ink-soft">
-          <p className="font-semibold text-forest">Registration opens {formatMontreal(opensAt)} (Montreal time).</p>
-          <p className="mt-1">You can look over the form now. It can&apos;t be sent until then, and this page will unlock by itself.</p>
+          <p className="font-semibold text-forest">{f.opensBanner(formatMontrealLong(opensAt, lang))}</p>
+          <p className="mt-1">{f.opensBannerBody}</p>
         </div>
       )}
       <div>
-        <h3 className="font-display text-lg font-semibold text-forest">
-          Section 1 &mdash; Parent/Guardian Information
-        </h3>
+        <h3 className="font-display text-lg font-semibold text-forest">{f.section1}</h3>
         <div className="mt-4 grid gap-5 sm:grid-cols-2">
-          <Field label="Parent/guardian full name" name="parentName" type="text" required />
-          <Field label="Email address" name="email" type="email" required />
+          <Field label={f.parentName} name="parentName" type="text" required />
+          <Field label={f.email} name="email" type="email" required />
         </div>
         <div className="mt-5 grid gap-5 sm:grid-cols-2">
-          <Field label="Primary phone" name="primaryPhone" type="tel" required />
-          <Field label="Secondary phone (optional)" name="secondaryPhone" type="tel" />
+          <Field label={f.primaryPhone} name="primaryPhone" type="tel" required />
+          <Field label={f.secondaryPhone} name="secondaryPhone" type="tel" />
         </div>
       </div>
 
       <div className="border-t border-gold/20 pt-6">
         <div className="flex items-center justify-between">
-          <h3 className="font-display text-lg font-semibold text-forest">
-            Section 2 &mdash; Child{children.length === 1 ? "" : "ren"}
-          </h3>
+          <h3 className="font-display text-lg font-semibold text-forest">{f.section2(children.length)}</h3>
           <button
             type="button"
             onClick={addChild}
             className="cursor-pointer rounded-full border border-gold/40 px-3 py-1.5 text-xs font-semibold text-forest hover:border-forest"
           >
-            + Add another child
+            {f.addChild}
           </button>
         </div>
-        <p className="mt-1 text-sm text-ink-soft">
-          Register siblings together &mdash; add each child below, and the weeks you pick further down apply to all of them.
-        </p>
+        <p className="mt-1 text-sm text-ink-soft">{f.siblingsHint}</p>
         <div className="mt-4 space-y-5">
           {children.map((child, index) => (
             <div key={child.key} className="rounded-xl border border-gold/30 bg-white p-4">
               <div className="flex items-center justify-between">
-                <p className="font-display text-sm font-semibold text-forest">Child {index + 1}</p>
+                <p className="font-display text-sm font-semibold text-forest">{f.childN(index + 1)}</p>
                 {children.length > 1 && (
                   <button
                     type="button"
                     onClick={() => removeChild(child.key)}
-                    aria-label={`Remove child ${index + 1}`}
+                    aria-label={f.removeChildAria(index + 1)}
                     className="cursor-pointer text-xs font-semibold text-ink-soft hover:text-flag"
                   >
-                    Remove
+                    {f.remove}
                   </button>
                 )}
               </div>
               <div className="mt-3 grid gap-4 sm:grid-cols-2">
                 <ChildField
-                  label="Child's full name"
+                  label={f.childName}
                   value={child.fullName}
                   onChange={(v) => updateChild(child.key, "fullName", v)}
                   type="text"
                 />
                 <ChildField
-                  label="Child's age"
+                  label={f.childAge}
                   value={child.age}
                   onChange={(v) => updateChild(child.key, "age", v)}
                   type="text"
@@ -346,7 +334,7 @@ export default function CampRegistrationForm() {
               </div>
               <div className="mt-4">
                 <ChildField
-                  label="Date of birth"
+                  label={f.childDob}
                   value={child.dateOfBirth}
                   onChange={(v) => updateChild(child.key, "dateOfBirth", v)}
                   type="date"
@@ -354,15 +342,19 @@ export default function CampRegistrationForm() {
               </div>
               <div className="mt-4">
                 <label htmlFor={`child-${index}-health`} className="mb-1 block text-sm font-medium text-ink">
-                  Health &amp; medical information (allergies, medical conditions, medication)
+                  {f.childHealth}
                 </label>
                 <textarea
                   id={`child-${index}-health`}
+                  aria-describedby={`child-${index}-health-hint`}
                   value={child.healthInfo}
                   onChange={(e) => updateChild(child.key, "healthInfo", e.target.value)}
                   rows={2}
                   className="w-full rounded-lg border border-gold/40 bg-white px-4 py-2.5 text-ink outline-none focus:border-forest focus:ring-1 focus:ring-forest"
                 />
+                <p id={`child-${index}-health-hint`} className="mt-1 text-xs text-ink-soft">
+                  {f.childHealthHint}
+                </p>
               </div>
             </div>
           ))}
@@ -370,27 +362,21 @@ export default function CampRegistrationForm() {
       </div>
 
       <div className="border-t border-gold/20 pt-6">
-        <h3 className="font-display text-lg font-semibold text-forest">
-          Section 3 &mdash; Emergency Contact Information
-        </h3>
+        <h3 className="font-display text-lg font-semibold text-forest">{f.section3}</h3>
         <div className="mt-4 grid gap-5 sm:grid-cols-2">
-          <Field label="Emergency contact name" name="emergencyName" type="text" required />
-          <Field label="Relationship (mother, father, aunt, uncle, etc.)" name="emergencyRelationship" type="text" required />
+          <Field label={f.emergencyName} name="emergencyName" type="text" required />
+          <Field label={f.emergencyRelationship} name="emergencyRelationship" type="text" required />
         </div>
         <div className="mt-5 grid gap-5 sm:grid-cols-2">
-          <Field label="Emergency contact phone" name="emergencyPhone" type="tel" required />
+          <Field label={f.emergencyPhone} name="emergencyPhone" type="tel" required />
         </div>
       </div>
 
       <div className="border-t border-gold/20 pt-6">
-        <h3 className="font-display text-lg font-semibold text-forest">Section 4 &mdash; Camp Week(s)</h3>
-        <p className="mt-1 text-sm text-ink-soft">
-          {juniorCamps.hoursLabel} &mdash; {juniorCamps.hours}, at {locations[juniorCamps.venue].name}.
-        </p>
-        <p className="text-sm text-ink-soft">{juniorCamps.scheduleNote}</p>
-        <p className="mt-2 text-sm font-semibold text-forest">
-          Select as many weeks as you&apos;d like &mdash; they apply to every child above.
-        </p>
+        <h3 className="font-display text-lg font-semibold text-forest">{f.section4}</h3>
+        <p className="mt-1 text-sm text-ink-soft">{f.hoursLine(m.info.hoursLabel, m.info.hours)}</p>
+        <p className="text-sm text-ink-soft">{m.info.scheduleNote}</p>
+        <p className="mt-2 text-sm font-semibold text-forest">{f.pickWeeksHint}</p>
         <div className="mt-4 grid gap-3 sm:grid-cols-2">
           {juniorCamps.weeks.map((week) => {
             const info = capacity.weeks[week.id];
@@ -417,24 +403,16 @@ export default function CampRegistrationForm() {
                     ✓
                   </span>
                 )}
-                <span className="font-display text-base font-semibold pr-6">{week.label}</span>
+                <span className="font-display text-base font-semibold pr-6">{weekLabel(week, lang)}</span>
                 <span className={`mt-1 block text-xs ${selected ? "text-cream/80" : "text-ink-soft"}`}>
-                  {capacity.loading || !info
-                    ? "Checking availability…"
-                    : full
-                      ? "Full"
-                      : `${info.remaining} of ${info.max} spots left`}
+                  {capacity.loading || !info ? m.week.checking : full ? m.week.full : m.week.spotsLeft(info.remaining, info.max)}
                 </span>
                 {week.note && (
-                  <span className={`mt-1 block text-xs ${selected ? "text-cream/80" : "text-ink-soft"}`}>{week.note.en}</span>
+                  <span className={`mt-1 block text-xs ${selected ? "text-cream/80" : "text-ink-soft"}`}>{week.note[lang]}</span>
                 )}
                 {!capacity.loading && info && !full && info.remaining <= 5 && (
-                  <span
-                    className={`mt-1 block text-xs font-semibold ${
-                      selected ? "text-gold-light" : "text-flag"
-                    }`}
-                  >
-                    Filling up fast — don&apos;t wait!
+                  <span className={`mt-1 block text-xs font-semibold ${selected ? "text-gold-light" : "text-flag"}`}>
+                    {m.week.fillingUp}
                   </span>
                 )}
               </button>
@@ -446,37 +424,30 @@ export default function CampRegistrationForm() {
       <div className="rounded-xl bg-cream-dark p-5">
         {weekCount > 0 ? (
           <>
-            <p className="font-display text-base font-semibold text-forest">
-              {children.length} child{children.length === 1 ? "" : "ren"} &times; {weekCount} week{weekCount === 1 ? "" : "s"}
-            </p>
+            <p className="font-display text-base font-semibold text-forest">{f.childrenTimesWeeks(children.length, weekCount)}</p>
             <dl className="mt-2 space-y-1 text-sm text-ink-soft">
               <div className="flex justify-between">
-                <dt>Subtotal</dt>
-                <dd>${formatCents(priceBreakdown.subtotalCents)}</dd>
+                <dt>{f.subtotal}</dt>
+                <dd>{f.money(priceBreakdown.subtotalCents)}</dd>
               </div>
               <div className="flex justify-between">
-                <dt>GST (5%)</dt>
-                <dd>${formatCents(priceBreakdown.gstCents)}</dd>
+                <dt>{f.gst}</dt>
+                <dd>{f.money(priceBreakdown.gstCents)}</dd>
               </div>
               <div className="flex justify-between">
-                <dt>QST (9.975%)</dt>
-                <dd>${formatCents(priceBreakdown.qstCents)}</dd>
+                <dt>{f.qst}</dt>
+                <dd>{f.money(priceBreakdown.qstCents)}</dd>
               </div>
               <div className="flex justify-between font-semibold text-forest">
-                <dt>Total</dt>
-                <dd>${formatCents(priceBreakdown.totalCents)}</dd>
+                <dt>{f.total}</dt>
+                <dd>{f.money(priceBreakdown.totalCents)}</dd>
               </div>
             </dl>
           </>
         ) : (
-          <p className="font-display text-base font-semibold text-forest">
-            ${juniorCamps.pricePerWeek} + tax per child, per week
-          </p>
+          <p className="font-display text-base font-semibold text-forest">{f.priceFrom(juniorCamps.pricePerWeek)}</p>
         )}
-        <p className="mt-2 text-sm text-ink-soft">
-          Reservations are made on a first-come, first-served basis. Camps fill up quickly.
-          Availability and pricing subject to change. Certain conditions may apply.
-        </p>
+        <p className="mt-2 text-sm text-ink-soft">{f.firstComeNote}</p>
       </div>
 
       <div className="border-t border-gold/20 pt-6">
@@ -487,30 +458,20 @@ export default function CampRegistrationForm() {
             onChange={(e) => setCodeOfConductAccepted(e.target.checked)}
             className="mt-1 h-4 w-4 flex-none rounded border-gold/40 text-forest focus:ring-forest"
           />
-          <span className="text-sm text-ink-soft">
-            I understand that my child is expected to follow program rules and
-            demonstrate respectful behavior at all times. I acknowledge that
-            the program reserves the right to send my child home if these
-            expectations are not met, and that this registration will not be
-            considered valid unless this acknowledgment is accepted.
-          </span>
+          <span className="text-sm text-ink-soft">{f.conductConsent}</span>
         </label>
       </div>
 
       <div className="rounded-xl border border-gold/30 bg-white p-5">
-        <h4 className="font-display text-base font-semibold text-forest">Method of Payment</h4>
+        <h4 className="font-display text-base font-semibold text-forest">{f.paymentTitle}</h4>
         <ul className="mt-3 space-y-2 text-sm text-ink-soft">
+          <li>{f.payHold}</li>
           <li>
-            Registering holds your spot right away. On the next screen (and by email) you&apos;ll get your unique reference and
-            the Interac e-Transfer instructions.
+            <Rich text={f.paySend(m.report.button)} />
           </li>
-          <li>
-            Send your e-Transfer within 12 hours to keep your spot, then tap <strong>&ldquo;I&apos;ve Sent My Payment.&rdquo;</strong> No
-            account and no screenshots needed.
-          </li>
-          <li>Your spot is confirmed once we verify the payment in our bank account.</li>
-          <li>Cancellations are subject to a ${juniorCamps.cancellationFee} administrative fee.</li>
-          <li>No payments to {locations[juniorCamps.venue].name} will be accepted.</li>
+          <li>{f.payConfirm}</li>
+          <li>{f.payCancelFee}</li>
+          <li>{f.payNotVenue}</li>
         </ul>
       </div>
 
@@ -521,12 +482,7 @@ export default function CampRegistrationForm() {
           onChange={(e) => setConsentAccepted(e.target.checked)}
           className="mt-1 h-4 w-4 flex-none rounded border-gold/40 text-forest focus:ring-forest"
         />
-        <span className="text-sm text-ink-soft">
-          By submitting the registration form you agree that information may
-          be disclosed to {business.name} for the purpose of administering
-          the junior golf camps. All information is confidential and shall
-          not be shared without permission.
-        </span>
+        <span className="text-sm text-ink-soft">{f.infoConsent}</span>
       </label>
 
       <button
@@ -534,12 +490,12 @@ export default function CampRegistrationForm() {
         disabled={status === "sending" || opensAt !== null}
         className="w-full cursor-pointer rounded-full bg-forest px-6 py-3 text-sm font-semibold text-cream transition-colors hover:bg-forest-dark disabled:cursor-not-allowed disabled:opacity-60"
       >
-        {status === "sending" ? "Sending…" : opensAt ? "Registration is not open yet" : "Register Now"}
+        {status === "sending" ? f.sending : opensAt ? f.notOpenYet : f.submit}
       </button>
 
       {status === "error" && (
         <p role="alert" className="text-sm text-flag">
-          {errorMessage || `Something went wrong. Please try again, or contact ${business.phone} directly.`}
+          {errorMessage || f.errorFallback}
         </p>
       )}
     </form>

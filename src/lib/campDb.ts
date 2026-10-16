@@ -6,6 +6,7 @@ import { parseSettings, type CampSettings } from "./campSettings";
 import { enqueueEmail } from "./outboxQueue";
 import { inCalendarOrder } from "./weeks";
 import { logError } from "./safeLog";
+import { parseLang, type Lang } from "./lang";
 
 // Server-only. The authoritative store for camp-week capacity and registrations.
 //
@@ -204,6 +205,8 @@ export type ReserveRegistrationInput = {
   emergencyPhone: string;
   codeOfConductAccepted: boolean;
   consentAccepted: boolean;
+  // The language the family used on the form; every email to them is written in it.
+  language?: Lang;
   children: ReserveChildInput[];
   weekIds: string[];
 };
@@ -401,8 +404,8 @@ async function reserveOnce(input: ReserveRegistrationInput): Promise<ReserveResu
          (idempotency_key, parent_name, email, primary_phone, secondary_phone,
           emergency_name, emergency_relationship, emergency_phone,
           code_of_conduct_accepted, consent_accepted, total_price_cents,
-          reference_code, amount_due_cents, hold_expires_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13, now() + make_interval(mins => $14))
+          reference_code, amount_due_cents, hold_expires_at, language)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13, now() + make_interval(mins => $14), $15)
        RETURNING id, hold_expires_at`,
       [
         input.idempotencyKey,
@@ -419,6 +422,7 @@ async function reserveOnce(input: ReserveRegistrationInput): Promise<ReserveResu
         reference,
         amountDueCents,
         holdMinutes,
+        parseLang(input.language),
       ]
     );
     const registrationId = regResult.rows[0].id as string;
@@ -486,6 +490,7 @@ export type RegistrationDetail = {
   emergencyName: string;
   emergencyRelationship: string;
   emergencyPhone: string;
+  language: Lang; // the language the family registered in; their emails and page follow it
   status: string;
   totalPriceCents: number; // before tax
   amountDueCents: number; // tax included
@@ -532,6 +537,7 @@ async function loadRegistration(client: Queryable, id: string): Promise<Registra
     emergencyName: row.emergency_name,
     emergencyRelationship: row.emergency_relationship,
     emergencyPhone: row.emergency_phone,
+    language: parseLang(row.language),
     status: row.status,
     totalPriceCents: row.total_price_cents,
     amountDueCents: row.amount_due_cents,
@@ -946,12 +952,14 @@ export async function grantReviewExtension(
 export async function cancelRegistration(
   registrationId: string,
   reason: string,
-  opts: { releaseReason?: "owner_cancelled" | "not_received" } = {}
+  // notifyParent: also write the family's cancellation notice (sent from the email outbox, in
+  // their language) in this same transaction. Off by default; the dashboard turns it on.
+  opts: { releaseReason?: "owner_cancelled" | "not_received"; notifyParent?: boolean } = {}
 ): Promise<{ ok: boolean; releasedWeekIds: string[] }> {
   const releaseReason = opts.releaseReason ?? "owner_cancelled";
   return inTransaction(async (client) => {
     const { rows } = await client.query(
-      `SELECT status, email, primary_phone FROM registrations WHERE id = $1 FOR UPDATE`,
+      `SELECT status, email, primary_phone, reinstate_count FROM registrations WHERE id = $1 FOR UPDATE`,
       [registrationId]
     );
     if (rows.length === 0) return { ok: false, releasedWeekIds: [] };
@@ -975,12 +983,21 @@ export async function cancelRegistration(
       ]);
       strike = true;
     }
+    // One notice per cancellation: a registration that is reinstated and cancelled again is a
+    // new event, so the count of reinstatements is part of the key.
+    let noticeQueued = false;
+    if (opts.notifyParent) {
+      noticeQueued = await enqueueEmail(client, "parent_cancellation", registrationId, {
+        dedupeKey: `parent_cancellation:${registrationId}:${row.reinstate_count}`,
+      });
+    }
     await writeAudit(client, "cancel_registration", registrationId, {
       reason,
       releaseReason,
       previousStatus: row.status,
       releasedWeekIds,
       strike,
+      parentNotified: noticeQueued,
     });
     return { ok: true, releasedWeekIds };
   });
@@ -1161,6 +1178,7 @@ export type QueueItem = {
   reinstateCount: number;
   releaseReason: string | null;
   cancelledAt: string | null;
+  language: Lang; // the family's language: reply to them in it
 };
 
 export type PaymentQueue = {
@@ -1177,7 +1195,7 @@ export type PaymentQueue = {
 const QUEUE_SELECT = `
   SELECT r.id, r.reference_code, r.status, r.parent_name, r.email, r.primary_phone, r.amount_due_cents,
          r.created_at, r.hold_expires_at, r.payment_reported_at, r.review_due_at, r.extension_count,
-         r.reinstate_count, r.release_reason, r.cancelled_at,
+         r.reinstate_count, r.release_reason, r.cancelled_at, r.language,
          (SELECT array_agg(c.full_name ORDER BY c.full_name) FROM children c WHERE c.registration_id = r.id) AS child_names,
          (SELECT array_agg(DISTINCT s.week_id ORDER BY s.week_id) FROM registration_spots s WHERE s.registration_id = r.id) AS week_ids,
          (SELECT count(*)::int FROM registration_spots s WHERE s.registration_id = r.id AND s.status = 'active') AS held_spots
@@ -1207,6 +1225,7 @@ function toQueueItem(row: Record<string, unknown>, nowMs: number): QueueItem {
     reinstateCount: row.reinstate_count as number,
     releaseReason: (row.release_reason as string | null) ?? null,
     cancelledAt: isoOrNull(row.cancelled_at),
+    language: parseLang(row.language),
   };
 }
 

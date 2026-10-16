@@ -31,6 +31,7 @@ function Card({ item, tone, children }: { item: QueueItem; tone: "overdue" | "no
           {item.primaryPhone}
         </a>{" "}
         &middot; {item.email}
+        {item.language === "fr" && <span className="ml-2 rounded-full bg-forest px-2 py-0.5 text-xs font-semibold text-cream">Français</span>}
       </p>
       <p className="mt-1 text-sm text-ink-soft">{(item.weekIds.length ? item.weekIds : []).map(weekLabel).join(" · ")}</p>
       {children}

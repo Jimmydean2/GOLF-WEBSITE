@@ -1,33 +1,28 @@
-import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { after } from "next/server";
 import { headers } from "next/headers";
 import Container from "@/components/Container";
 import ReportPaymentButton from "@/components/ReportPaymentButton";
-import { business, juniorCamps } from "@/lib/content";
+import Rich from "@/components/Rich";
+import { business } from "@/lib/content";
 import { isDatabaseConfigured } from "@/lib/db";
 import { getCampSettings, getRegistrationById } from "@/lib/campDb";
-import { etransferInstructionLines, formatMontreal } from "@/lib/payment";
-import { formatCents } from "@/lib/pricing";
+import { etransferInstructionLines } from "@/lib/payment";
+import { formatMoney, formatMontreal, getMessages } from "@/lib/i18n";
+import { labelForWeekId } from "@/lib/season";
 import { registrationIdFromToken } from "@/lib/registrationLink";
 import { maybeRunFromTraffic } from "@/lib/scheduledCheck";
 import { maskEmail, siteOriginFromHeaders } from "@/lib/siteUrl";
 import { logError } from "@/lib/safeLog";
+import type { Lang } from "@/lib/lang";
 
-// A parent's private reservation page. The link is the credential (there is no account):
-// it is never indexed, never sent as a referrer, and never cached. It can show this one
-// registration and report payment, nothing more.
-export const metadata: Metadata = {
-  title: `Your camp reservation | ${business.name}`,
-  robots: { index: false, follow: false },
-  referrer: "no-referrer",
-};
-export const dynamic = "force-dynamic";
-
-const weekLabel = (id: string) => juniorCamps.weeks.find((w) => w.id === id)?.label ?? id;
-
-export default async function ReservationPage({ params }: { params: Promise<{ token: string }> }) {
-  const { token } = await params;
+// A parent's private reservation page, in either language (the English page and the French page
+// are this component with a different dictionary). The link is the credential (there is no
+// account): it is never indexed, never sent as a referrer, and never cached. It can show this
+// one registration and report payment, nothing more.
+export default async function ReservationView({ token, lang }: { token: string; lang: Lang }) {
+  const m = getMessages(lang);
+  const p = m.parent;
   const registrationId = registrationIdFromToken(token);
   if (!registrationId || !isDatabaseConfigured()) notFound();
   const registration = await getRegistrationById(registrationId);
@@ -38,9 +33,9 @@ export default async function ReservationPage({ params }: { params: Promise<{ to
   const origin = siteOriginFromHeaders(await headers());
   if (origin) after(() => maybeRunFromTraffic(origin).catch((err) => logError("Scheduled check from a visit failed:", err)));
 
-  const amountText = `$${formatCents(registration.amountDueCents)}`;
+  const amountText = formatMoney(registration.amountDueCents, lang);
   const childNames = registration.children.map((c) => c.fullName).join(", ");
-  const weeks = (registration.weekIds.length > 0 ? registration.weekIds : registration.allWeekIds).map(weekLabel);
+  const weeks = (registration.weekIds.length > 0 ? registration.weekIds : registration.allWeekIds).map((id) => labelForWeekId(id, lang));
 
   const settings = await getCampSettings();
   const payBy =
@@ -51,87 +46,73 @@ export default async function ReservationPage({ params }: { params: Promise<{ to
     <div className="py-16 sm:py-24">
       <Container className="max-w-xl">
         <div className="rounded-2xl border border-gold/30 bg-cream p-6 sm:p-8">
-          <p className="font-display text-sm uppercase tracking-[0.3em] text-gold">Junior Camp reservation</p>
+          <p className="font-display text-sm uppercase tracking-[0.3em] text-gold">{p.eyebrow}</p>
           <h1 className="mt-2 font-display text-2xl font-semibold text-forest">{childNames}</h1>
           <p className="mt-1 text-sm text-ink-soft">{weeks.join(" · ")}</p>
 
           <div className="mt-6 rounded-xl bg-cream-dark p-5">
-            <p className="text-xs font-semibold uppercase tracking-[0.15em] text-gold-deep">Your reference</p>
+            <p className="text-xs font-semibold uppercase tracking-[0.15em] text-gold-deep">{p.reference}</p>
             <p className="mt-1 font-display text-3xl font-semibold tracking-wider text-forest">{registration.reference}</p>
-            <p className="mt-4 text-xs font-semibold uppercase tracking-[0.15em] text-gold-deep">Amount due</p>
+            <p className="mt-4 text-xs font-semibold uppercase tracking-[0.15em] text-gold-deep">{p.amountDue}</p>
             <p className="mt-1 font-display text-xl font-semibold text-forest">
-              {amountText} <span className="text-sm font-normal text-ink-soft">tax included</span>
+              {amountText} <span className="text-sm font-normal text-ink-soft">{p.taxIncluded}</span>
             </p>
           </div>
 
           {registration.status === "pending_payment" && (
             <>
-              <h2 className="mt-8 font-display text-lg font-semibold text-forest">Send your payment</h2>
+              <h2 className="mt-8 font-display text-lg font-semibold text-forest">{p.sendPayment}</h2>
               <ol className="mt-3 list-decimal space-y-2 pl-5 text-sm leading-relaxed text-ink-soft">
-                {etransferInstructionLines(registration.reference, amountText).map((line) => (
+                {etransferInstructionLines(registration.reference, amountText, "page", lang).map((line) => (
                   <li key={line}>{line}</li>
                 ))}
               </ol>
               {payBy && (
                 <p className="mt-4 text-sm text-ink-soft">
-                  Your spot is held until <strong className="text-ink">{formatMontreal(payBy)}</strong> (Montreal time).
+                  <Rich text={p.heldUntil(formatMontreal(payBy, lang))} />
                 </p>
               )}
               <p className="mt-2 text-xs text-ink-soft">
-                We&apos;ve also emailed these instructions and this page&apos;s private link to{" "}
-                <strong className="text-ink">{maskEmail(registration.email)}</strong>. Not the right address? Call{" "}
-                <a href={business.phoneHref} className="font-semibold text-forest hover:underline">
-                  {business.phone}
-                </a>
-                .
+                <Rich text={p.emailedTo(maskEmail(registration.email), business.phone)} />
               </p>
               <div className="mt-6">
-                <ReportPaymentButton token={token} />
+                <ReportPaymentButton token={token} lang={lang} />
               </div>
-              <p className="mt-3 text-xs text-ink-soft">
-                Tapping the button tells us you&apos;ve sent it. Your spot is confirmed once we verify the payment in our bank account.
-              </p>
+              <p className="mt-3 text-xs text-ink-soft">{p.tapNote}</p>
             </>
           )}
 
           {registration.status === "payment_reported" && (
             <div className="mt-8 rounded-xl border border-forest/30 bg-white p-5">
-              <h2 className="font-display text-lg font-semibold text-forest">Thank you &mdash; we&apos;re checking your payment</h2>
+              <h2 className="font-display text-lg font-semibold text-forest">{p.reportedTitle}</h2>
               <p className="mt-2 text-sm leading-relaxed text-ink-soft">
-                We&apos;ve noted that you sent your payment, and your spot is being held while we verify it. You&apos;ll get an email
-                as soon as it&apos;s confirmed. Please keep your reference, <strong className="text-ink">{registration.reference}</strong>,
-                handy in case we need to match it.
+                <Rich text={p.reportedBody(registration.reference)} />
               </p>
             </div>
           )}
 
           {registration.status === "paid" && (
             <div className="mt-8 rounded-xl border border-forest/30 bg-white p-5">
-              <h2 className="font-display text-lg font-semibold text-forest">You&apos;re confirmed!</h2>
-              <p className="mt-2 text-sm leading-relaxed text-ink-soft">
-                Your payment has been received and your spot is confirmed. Camp details are in your confirmation email.
-              </p>
+              <h2 className="font-display text-lg font-semibold text-forest">{p.paidTitle}</h2>
+              <p className="mt-2 text-sm leading-relaxed text-ink-soft">{p.paidBody}</p>
             </div>
           )}
 
           {(registration.status === "cancelled" || registration.status === "refunded") && (
             <div className="mt-8 rounded-xl border border-gold/40 bg-white p-5">
-              <h2 className="font-display text-lg font-semibold text-forest">This reservation isn&apos;t active</h2>
+              <h2 className="font-display text-lg font-semibold text-forest">{p.inactiveTitle}</h2>
               <p className="mt-2 text-sm leading-relaxed text-ink-soft">
-                {registration.releaseReason === "expired_unpaid"
-                  ? "It was released because we didn't see a payment report in time. If you already sent your e-Transfer, your money isn't lost."
-                  : "It has been released."}{" "}
-                Please contact us with your reference and we&apos;ll sort it out.
+                {registration.releaseReason === "expired_unpaid" ? p.inactiveExpired : p.inactiveReleased} {p.inactiveContact}
               </p>
             </div>
           )}
 
           <p className="mt-8 text-center text-sm text-ink-soft">
-            Questions? Call{" "}
+            {p.questions} {p.callWord}{" "}
             <a href={business.phoneHref} className="font-semibold text-forest hover:underline">
               {business.phone}
             </a>{" "}
-            or email{" "}
+            {p.orEmail}{" "}
             <a href={`mailto:${business.email}`} className="font-semibold text-forest hover:underline">
               {business.email}
             </a>

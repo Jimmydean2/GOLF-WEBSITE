@@ -4,6 +4,7 @@ import { useState } from "react";
 import type { RegistrationDetail } from "@/lib/campDb";
 import { formatCents } from "@/lib/pricing";
 import { formatMontreal } from "@/lib/payment";
+import { labelForWeekId } from "@/lib/season";
 import { useAdminCall } from "./AdminActions";
 import RegistrationActionButtons from "./AdminRegistrationActions";
 
@@ -119,10 +120,11 @@ export default function AdminCampTools() {
                 </p>
                 <p className="text-sm text-ink-soft">
                   Parent: {r.parentName} ({r.email}, {r.primaryPhone})
+                  {r.language === "fr" && <span className="ml-2 rounded-full bg-forest px-2 py-0.5 text-xs font-semibold text-cream">Français: reply in French</span>}
                 </p>
                 <p className="text-sm text-ink-soft">
-                  Weeks: {r.weekIds.join(", ") || "none held"}
-                  {r.status === "cancelled" && r.allWeekIds.length > 0 && <> (released: {r.allWeekIds.join(", ")})</>}
+                  Weeks: {r.weekIds.map((id) => labelForWeekId(id)).join(" · ") || "none held"}
+                  {r.status === "cancelled" && r.allWeekIds.length > 0 && <> (released: {r.allWeekIds.map((id) => labelForWeekId(id)).join(" · ")})</>}
                 </p>
                 <p className="text-sm text-ink-soft">
                   Status: <span className="font-semibold">{statusLabel(r)}</span> &middot; Due: ${formatCents(r.amountDueCents)} incl. tax

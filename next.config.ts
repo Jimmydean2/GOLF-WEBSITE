@@ -18,6 +18,7 @@ const nextConfig: NextConfig = {
       { source: "/admin/:path*", headers: privateHeaders },
       { source: "/api/admin/:path*", headers: privateHeaders },
       { source: "/camp-registration/:path*", headers: privateHeaders },
+      { source: "/fr/inscription-camp/:path*", headers: privateHeaders },
       { source: "/api/camp-registration/:path*", headers: privateHeaders },
     ];
   },

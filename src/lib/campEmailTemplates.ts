@@ -1,7 +1,10 @@
-import { business, juniorCamps, locations } from "./content";
+import { business } from "./content";
 import type { RegistrationDetail } from "./campDb";
 import { calculateTotal, formatCents } from "./pricing";
 import { etransferAddress, etransferInstructionLines, formatMontreal } from "./payment";
+import type { Lang } from "./lang";
+import { getMessages, renderRichHtml, renderRichText, formatMoney } from "./i18n";
+import { labelForWeekId, season } from "./season";
 
 const FOREST = "#1f4a34";
 const GOLD = "#c89b3c";
@@ -21,13 +24,14 @@ function escapeHtml(value: string): string {
     .replace(/'/g, "&#39;");
 }
 
+// The administrators' emails are always in English.
 function weekLabel(weekId: string): string {
-  return juniorCamps.weeks.find((w) => w.id === weekId)?.label ?? weekId;
+  return labelForWeekId(weekId, "en");
 }
 
-function emailShell(bodyHtml: string): string {
+function emailShell(bodyHtml: string, lang: Lang = "en"): string {
   return `<!doctype html>
-<html>
+<html lang="${lang === "fr" ? "fr-CA" : "en"}">
   <body style="margin:0; padding:0; background:${CREAM}; font-family:-apple-system,Segoe UI,Helvetica,Arial,sans-serif; color:#1b1b16;">
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:${CREAM}; padding:32px 16px;">
       <tr>
@@ -94,6 +98,7 @@ export function buildCoachNotificationEmail(
     ["Parent/guardian", registration.parentName],
     ["Parent email", registration.email],
     ["Primary phone", registration.primaryPhone],
+    ["Language", registration.language === "fr" ? "Français (reply in French)" : "English"],
   ];
 
   const childRows = registration.children
@@ -157,105 +162,131 @@ ${dashboardUrl}`;
   return { subject, html, text };
 }
 
+// A short block of key facts, repeated in the HTML emails to parents.
+function labelHtml(text: string): string {
+  return `<p style="margin:0 0 4px; font-size:12px; letter-spacing:0.08em; text-transform:uppercase; color:${GOLD}; font-weight:bold;">${escapeHtml(text)}</p>`;
+}
+
+function priceRowsFor(subtotalCents: number, lang: Lang): [string, string][] {
+  const { gstCents, qstCents, totalCents } = calculateTotal(subtotalCents);
+  const f = getMessages(lang).form;
+  return [
+    [f.subtotal, formatMoney(subtotalCents, lang)],
+    [f.gst, formatMoney(gstCents, lang)],
+    [f.qst, formatMoney(qstCents, lang)],
+    [f.total, formatMoney(totalCents, lang)],
+  ];
+}
+
+function weekNoteFor(weekId: string, lang: Lang): string | null {
+  const note = season.weeks.find((w) => w.id === weekId)?.note;
+  return note ? note[lang] : null;
+}
+
 export function buildParentConfirmationEmail(registration: RegistrationDetail): {
   subject: string;
   html: string;
   text: string;
 } {
-  const weekLabels = registration.weekIds.map(weekLabel);
+  const lang = registration.language;
+  const m = getMessages(lang);
+  const e = m.email.confirmation;
+  const info = m.info;
+  const weekLabels = registration.weekIds.map((id) => labelForWeekId(id, lang));
   const weekCount = weekLabels.length;
-  const datesHtml = weekLabels.map((l) => `<span style="display:block;">${l}</span>`).join("");
+  const notes = registration.weekIds.map((id) => weekNoteFor(id, lang)).filter((n): n is string => Boolean(n));
+  const datesHtml = weekLabels.map((l) => `<span style="display:block;">${escapeHtml(l)}</span>`).join("");
   const datesText = weekLabels.join("\n");
-  const venue = locations[juniorCamps.venue];
   const firstName = registration.parentName.split(" ")[0] || registration.parentName;
   const childNames = registration.children.map((c) => c.fullName).join(", ");
-  const subject = `You're confirmed! ${childNames}'s spot at ${business.name} Junior Camp`;
-  const safeFirstName = escapeHtml(firstName);
-  const safeChildNames = escapeHtml(childNames);
-  const confNumber = registration.reference;
+  const subject = e.subject(childNames);
+  const plural = !(weekCount === 1 && registration.children.length === 1);
+  const rows = priceRowsFor(registration.totalPriceCents, lang);
 
-  const priceRowsHtml = priceBreakdownRows(registration.totalPriceCents)
+  const priceRowsHtml = rows
     .map(
       ([label, value]) =>
-        `<tr><td style="padding:3px 0; font-size:13px; color:${INK_SOFT};">${label}</td><td style="padding:3px 0; font-size:13px; color:#1b1b16; font-weight:700; text-align:right;">${value}</td></tr>`
+        `<tr><td style="padding:3px 0; font-size:13px; color:${INK_SOFT};">${escapeHtml(label)}</td><td style="padding:3px 0; font-size:13px; color:#1b1b16; font-weight:700; text-align:right;">${escapeHtml(value)}</td></tr>`
     )
     .join("\n");
+  const notesHtml = notes.map((n) => `<p style="margin:0 0 10px; font-size:13px; color:${INK_SOFT}; line-height:1.5;">${escapeHtml(n)}</p>`).join("");
 
-  const html = emailShell(`
-    <p style="margin:0 0 16px; font-family:Georgia,'Times New Roman',serif; font-size:22px; font-weight:bold; color:${FOREST};">Thank you — you're all set!</p>
-    <p style="margin:0 0 16px; font-size:14px; color:${INK_SOFT}; line-height:1.6;">Hi ${safeFirstName},</p>
+  const html = emailShell(
+    `
+    <p style="margin:0 0 16px; font-family:Georgia,'Times New Roman',serif; font-size:22px; font-weight:bold; color:${FOREST};">${escapeHtml(e.heading)}</p>
+    <p style="margin:0 0 16px; font-size:14px; color:${INK_SOFT}; line-height:1.6;">${escapeHtml(m.email.hello(firstName))}</p>
     <p style="margin:0 0 20px; font-size:14px; color:${INK_SOFT}; line-height:1.6;">
-      Payment has been received and <strong>${safeChildNames}'s</strong> spot${weekCount === 1 && registration.children.length === 1 ? " is" : "s are"} now confirmed for Junior Camp at Golf Dorval. We can't wait to see ${registration.children.length === 1 ? "them" : "everyone"} on the course! Here's everything you need for camp day.
+      ${renderRichHtml(e.intro(childNames, plural, registration.children.length))}
     </p>
 
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 20px; border:1px solid ${BORDER}; border-radius:12px;">
       <tr>
         <td style="padding:16px 20px;">
-          <p style="margin:0 0 4px; font-size:12px; letter-spacing:0.08em; text-transform:uppercase; color:${GOLD}; font-weight:bold;">Confirmation Number</p>
-          <p style="margin:0 0 10px; font-size:14px; color:#1b1b16; font-weight:700;">${confNumber}</p>
-          <p style="margin:0 0 4px; font-size:12px; letter-spacing:0.08em; text-transform:uppercase; color:${GOLD}; font-weight:bold;">Children</p>
-          <p style="margin:0 0 10px; font-size:14px; color:#1b1b16;">${safeChildNames}</p>
-          <p style="margin:0 0 4px; font-size:12px; letter-spacing:0.08em; text-transform:uppercase; color:${GOLD}; font-weight:bold;">Confirmed Week${weekCount === 1 ? "" : "s"}</p>
+          ${labelHtml(e.confirmationNumber)}
+          <p style="margin:0 0 10px; font-size:14px; color:#1b1b16; font-weight:700;">${escapeHtml(registration.reference)}</p>
+          ${labelHtml(e.children)}
+          <p style="margin:0 0 10px; font-size:14px; color:#1b1b16;">${escapeHtml(childNames)}</p>
+          ${labelHtml(e.confirmedWeeks(weekCount))}
           <div style="margin:0 0 10px; font-size:16px; font-weight:bold; color:${FOREST};">${datesHtml}</div>
-          <p style="margin:0 0 4px; font-size:12px; letter-spacing:0.08em; text-transform:uppercase; color:${GOLD}; font-weight:bold;">Amount Paid</p>
+          ${notesHtml}
+          ${labelHtml(e.amountPaid)}
           <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 10px;">${priceRowsHtml}</table>
-          <p style="margin:0 0 4px; font-size:12px; letter-spacing:0.08em; text-transform:uppercase; color:${GOLD}; font-weight:bold;">Hours</p>
-          <p style="margin:0 0 10px; font-size:14px; color:#1b1b16;">${juniorCamps.hours}</p>
-          <p style="margin:0 0 4px; font-size:12px; letter-spacing:0.08em; text-transform:uppercase; color:${GOLD}; font-weight:bold;">Location</p>
-          <p style="margin:0; font-size:14px; color:#1b1b16;">${venue.name}, ${venue.address}</p>
+          ${labelHtml(e.hours)}
+          <p style="margin:0 0 10px; font-size:14px; color:#1b1b16;">${escapeHtml(info.hours)}</p>
+          ${labelHtml(e.location)}
+          <p style="margin:0; font-size:14px; color:#1b1b16;">${escapeHtml(info.venueName)}, ${escapeHtml(info.venueAddress)}</p>
         </td>
       </tr>
     </table>
 
-    <p style="margin:0 0 4px; font-size:15px; font-weight:bold; color:${FOREST};">Drop-off &amp; Pick-up</p>
+    <p style="margin:0 0 4px; font-size:15px; font-weight:bold; color:${FOREST};">${escapeHtml(e.dropPickTitle)}</p>
     <p style="margin:0 0 20px; font-size:14px; color:${INK_SOFT}; line-height:1.7;">
-      Drop-off: <strong>${juniorCamps.dropOffTime}</strong><br>
-      Pick-up: <strong>${juniorCamps.pickUpTime}</strong><br>
-      ${juniorCamps.scheduleNote}
+      ${escapeHtml(e.dropOff)}: <strong>${escapeHtml(info.dropOffTime)}</strong><br>
+      ${escapeHtml(e.pickUp)}: <strong>${escapeHtml(info.pickUpTime)}</strong><br>
+      ${escapeHtml(info.scheduleNote)}
     </p>
 
-    <p style="margin:0 0 4px; font-size:15px; font-weight:bold; color:${FOREST};">What to Bring</p>
-    ${listHtml(juniorCamps.whatToBring)}
+    <p style="margin:0 0 4px; font-size:15px; font-weight:bold; color:${FOREST};">${escapeHtml(e.toBring)}</p>
+    ${listHtml(info.whatToBring.map(escapeHtml))}
 
-    <p style="margin:20px 0 4px; font-size:15px; font-weight:bold; color:${FOREST};">Safety &amp; Responsibility</p>
-    ${listHtml(juniorCamps.safetyInfo)}
+    <p style="margin:20px 0 4px; font-size:15px; font-weight:bold; color:${FOREST};">${escapeHtml(e.safety)}</p>
+    ${listHtml(info.safetyInfo.map(escapeHtml))}
 
     <p style="margin:24px 0 0; font-size:14px; color:${INK_SOFT}; line-height:1.6;">
-      Questions before camp day? Just reply to this email or reach us at
-      <a href="${business.phoneHref}" style="color:${FOREST}; font-weight:600;">${business.phone}</a>.
-      We're looking forward to a great week!
+      ${escapeHtml(e.closing(business.phone))}
     </p>
-  `);
+  `,
+    lang
+  );
 
-  const text = `Thank you — you're all set!
+  const colon = lang === "fr" ? " :" : ":";
+  const text = `${e.heading}
 
-Hi ${firstName},
+${m.email.hello(firstName)}
 
-Payment has been received and ${childNames}'s spot${weekCount === 1 && registration.children.length === 1 ? " is" : "s are"} confirmed for Junior Camp at Golf Dorval.
+${renderRichText(e.textIntro(childNames, plural))}
 
-CONFIRMATION NUMBER: ${confNumber}
+${e.confirmationNumber.toUpperCase()}${colon} ${registration.reference}
 
-CONFIRMED WEEK${weekCount === 1 ? "" : "S"}:
+${e.confirmedWeeks(weekCount).toUpperCase()}${colon}
 ${datesText}
+${notes.length ? `\n${notes.join("\n")}\n` : ""}
+${rows.map(([label, value]) => `${label}${colon} ${value}`).join("\n")}
 
-${priceBreakdownRows(registration.totalPriceCents)
-  .map(([label, value]) => `${label}: ${value}`)
-  .join("\n")}
+${e.hours.toUpperCase()}${colon} ${info.hours}
+${e.location.toUpperCase()}${colon} ${info.venueName}, ${info.venueAddress}
 
-HOURS: ${juniorCamps.hours}
-LOCATION: ${venue.name}, ${venue.address}
+${e.dropOff.toUpperCase()}${colon} ${info.dropOffTime}
+${e.pickUp.toUpperCase()}${colon} ${info.pickUpTime}
+${info.scheduleNote}
 
-DROP-OFF: ${juniorCamps.dropOffTime}
-PICK-UP: ${juniorCamps.pickUpTime}
-${juniorCamps.scheduleNote}
+${e.toBring.toUpperCase()}${colon}
+${info.whatToBring.map((i) => `- ${i}`).join("\n")}
 
-WHAT TO BRING:
-${juniorCamps.whatToBring.map((i) => `- ${i}`).join("\n")}
+${e.safety.toUpperCase()}${colon}
+${info.safetyInfo.map((i) => `- ${i}`).join("\n")}
 
-SAFETY & RESPONSIBILITY:
-${juniorCamps.safetyInfo.map((i) => `- ${i}`).join("\n")}
-
-Questions? Reply to this email or call ${business.phone}.
+${e.textClosing(business.phone)}
 `;
 
   return { subject, html, text };
@@ -272,46 +303,55 @@ export function buildParentInstructionsEmail(
   registration: RegistrationDetail,
   opts: { statusUrl: string; payByAt: string }
 ): { subject: string; html: string; text: string } {
-  const amount = `$${formatCents(registration.amountDueCents)}`;
-  const lines = etransferInstructionLines(registration.reference, amount, "email");
+  const lang = registration.language;
+  const m = getMessages(lang);
+  const e = m.email.instructions;
+  const amount = formatMoney(registration.amountDueCents, lang);
+  const lines = etransferInstructionLines(registration.reference, amount, "email", lang);
   const childNames = registration.children.map((c) => c.fullName).join(", ");
-  const weeks = registration.weekIds.map(weekLabel);
-  const subject = `Send your payment to hold ${childNames}'s camp spot (${registration.reference})`;
-  const payBy = formatMontreal(opts.payByAt);
+  const weeks = registration.weekIds.map((id) => labelForWeekId(id, lang));
+  const firstName = registration.parentName.split(" ")[0] || registration.parentName;
+  const subject = e.subject(childNames, registration.reference);
+  const payBy = formatMontreal(opts.payByAt, lang);
+  const intro = e.intro(firstName, childNames, weeks.join(", "), payBy);
 
-  const html = emailShell(`
-    <p style="margin:0 0 16px; font-family:Georgia,'Times New Roman',serif; font-size:20px; font-weight:bold; color:${FOREST};">Your spot is reserved &mdash; send your payment</p>
-    <p style="margin:0 0 16px; font-size:14px; color:${INK_SOFT}; line-height:1.6;">Hi ${escapeHtml(registration.parentName.split(" ")[0] || registration.parentName)}, we're holding a spot for <strong>${escapeHtml(childNames)}</strong> for ${weeks.map(escapeHtml).join(", ")}. It stays held until <strong>${escapeHtml(payBy)}</strong> (Montreal time).</p>
+  const html = emailShell(
+    `
+    <p style="margin:0 0 16px; font-family:Georgia,'Times New Roman',serif; font-size:20px; font-weight:bold; color:${FOREST};">${escapeHtml(e.heading)}</p>
+    <p style="margin:0 0 16px; font-size:14px; color:${INK_SOFT}; line-height:1.6;">${renderRichHtml(intro)}</p>
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 16px; border:1px solid ${BORDER}; border-radius:12px;">
       <tr><td style="padding:16px 20px;">
-        <p style="margin:0 0 4px; font-size:12px; letter-spacing:0.08em; text-transform:uppercase; color:${GOLD}; font-weight:bold;">Your reference</p>
+        ${labelHtml(e.referenceLabel)}
         <p style="margin:0 0 12px; font-size:22px; color:#1b1b16; font-weight:700; letter-spacing:0.05em;">${escapeHtml(registration.reference)}</p>
-        <p style="margin:0 0 4px; font-size:12px; letter-spacing:0.08em; text-transform:uppercase; color:${GOLD}; font-weight:bold;">Amount to send</p>
-        <p style="margin:0; font-size:18px; color:#1b1b16; font-weight:700;">${escapeHtml(amount)} <span style="font-size:12px; font-weight:400; color:${INK_SOFT};">(tax included)</span></p>
+        ${labelHtml(e.amountLabel)}
+        <p style="margin:0; font-size:18px; color:#1b1b16; font-weight:700;">${escapeHtml(amount)} <span style="font-size:12px; font-weight:400; color:${INK_SOFT};">(${escapeHtml(m.email.taxIncluded)})</span></p>
       </td></tr>
     </table>
     <ol style="margin:0 0 16px; padding-left:20px; color:${INK_SOFT}; font-size:14px; line-height:1.7;">
       ${lines.map((l) => `<li>${escapeHtml(l)}</li>`).join("\n      ")}
     </ol>
     <table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 auto 16px;"><tr><td style="border-radius:999px; background:${GOLD};">
-      <a href="${escapeHtml(opts.statusUrl)}" style="display:inline-block; padding:14px 28px; font-size:14px; font-weight:bold; color:#1b1b16; text-decoration:none;">Open my reservation page</a>
+      <a href="${escapeHtml(opts.statusUrl)}" style="display:inline-block; padding:14px 28px; font-size:14px; font-weight:bold; color:#1b1b16; text-decoration:none;">${escapeHtml(e.button)}</a>
     </td></tr></table>
-    <p style="margin:0; font-size:12px; color:${INK_SOFT}; line-height:1.6;">Your spot is confirmed only once the payment is verified in our bank account. Keep this email: the button above is your private link, so please don't forward it.</p>
-  `);
+    <p style="margin:0; font-size:12px; color:${INK_SOFT}; line-height:1.6;">${escapeHtml(e.footer)}</p>
+  `,
+    lang
+  );
 
-  const text = `Your spot is reserved - send your payment
+  const colon = lang === "fr" ? " :" : ":";
+  const text = `${e.heading}
 
-We're holding a spot for ${childNames} for ${weeks.join(", ")}. It stays held until ${payBy} (Montreal time).
+${renderRichText(intro)}
 
-Reference: ${registration.reference}
-Amount to send: ${amount} (tax included)
+${e.referenceLabel}${colon} ${registration.reference}
+${e.amountLabel}${colon} ${e.textAmount(amount)}
 
 ${lines.map((l, i) => `${i + 1}. ${l}`).join("\n")}
 
-Your private reservation page (please don't forward it):
+${e.textLink}
 ${opts.statusUrl}
 
-Your spot is confirmed only once the payment is verified in our bank account.`;
+${e.textFooter}`;
   return { subject, html, text };
 }
 
@@ -388,19 +428,46 @@ Review queue (login required): ${opts.dashboardUrl}`;
 }
 
 export function buildParentReleaseNoticeEmail(registration: RegistrationDetail): { subject: string; html: string; text: string } {
+  const lang = registration.language;
+  const e = getMessages(lang).email.release;
   const childNames = registration.children.map((c) => c.fullName).join(", ");
-  const subject = `Your camp reservation for ${childNames} was released (${registration.reference})`;
-  const body =
-    "Your reservation was released because we didn't see a payment report in time. " +
-    "If you already sent your e-Transfer, your money isn't lost: reply to this email with your reference, " +
-    "and we'll check and reinstate you if a spot is still free, or refund you. " +
-    "If you still want a spot, you're welcome to register again.";
-  const html = emailShell(`
-    <p style="margin:0 0 12px; font-family:Georgia,'Times New Roman',serif; font-size:20px; font-weight:bold; color:${FOREST};">Your reservation was released</p>
-    <p style="margin:0 0 12px; font-size:14px; color:${INK_SOFT}; line-height:1.6;">Reference <strong>${escapeHtml(registration.reference)}</strong> &middot; ${escapeHtml(childNames)}</p>
-    <p style="margin:0; font-size:14px; color:${INK_SOFT}; line-height:1.6;">${escapeHtml(body)}</p>
-  `);
-  const text = `Your reservation was released\n\nReference ${registration.reference} - ${childNames}\n\n${body}`;
+  const subject = e.subject(childNames, registration.reference);
+  const reference = e.reference(registration.reference, childNames);
+  const html = emailShell(
+    `
+    <p style="margin:0 0 12px; font-family:Georgia,'Times New Roman',serif; font-size:20px; font-weight:bold; color:${FOREST};">${escapeHtml(e.heading)}</p>
+    <p style="margin:0 0 12px; font-size:14px; color:${INK_SOFT}; line-height:1.6;">${renderRichHtml(reference)}</p>
+    <p style="margin:0; font-size:14px; color:${INK_SOFT}; line-height:1.6;">${escapeHtml(e.body)}</p>
+  `,
+    lang
+  );
+  const text = `${e.heading}\n\n${renderRichText(reference)}\n\n${e.body}`;
+  return { subject, html, text };
+}
+
+// The family's notice when the owner cancels their registration, or releases it because no
+// payment could be found. Sent only when the owner leaves "email the family" ticked.
+export function buildParentCancellationEmail(registration: RegistrationDetail): { subject: string; html: string; text: string } {
+  const lang = registration.language;
+  const e = getMessages(lang).email.cancellation;
+  const notReceived = registration.releaseReason === "not_received";
+  const wasPaid = Boolean(registration.verifiedAt);
+  const childNames = registration.children.map((c) => c.fullName).join(", ");
+  const weeks = registration.allWeekIds.map((id) => labelForWeekId(id, lang));
+  const subject = notReceived ? e.subjectNotReceived(childNames, registration.reference) : e.subjectCancelled(childNames, registration.reference);
+  const heading = notReceived ? e.headingNotReceived : e.headingCancelled;
+  const body = notReceived ? e.notReceived : wasPaid ? e.cancelledPaid : e.cancelledUnpaid;
+  const paragraphs = [e.weeksReleased(weeks.join("; ")), body, e.register, e.contact(business.phone)];
+  const reference = e.reference(registration.reference, childNames);
+  const html = emailShell(
+    `
+    <p style="margin:0 0 12px; font-family:Georgia,'Times New Roman',serif; font-size:20px; font-weight:bold; color:${FOREST};">${escapeHtml(heading)}</p>
+    <p style="margin:0 0 12px; font-size:14px; color:${INK_SOFT}; line-height:1.6;">${renderRichHtml(reference)}</p>
+    ${paragraphs.map((p) => `<p style="margin:0 0 12px; font-size:14px; color:${INK_SOFT}; line-height:1.6;">${renderRichHtml(p)}</p>`).join("\n    ")}
+  `,
+    lang
+  );
+  const text = `${heading}\n\n${renderRichText(reference)}\n\n${paragraphs.map(renderRichText).join("\n\n")}`;
   return { subject, html, text };
 }
 
@@ -411,35 +478,41 @@ export function buildParentReminderEmail(
   registration: RegistrationDetail,
   opts: { statusUrl: string; payByAt: string }
 ): { subject: string; html: string; text: string } {
-  const amount = `$${formatCents(registration.amountDueCents)}`;
+  const lang = registration.language;
+  const m = getMessages(lang);
+  const e = m.email.reminder;
+  const amount = formatMoney(registration.amountDueCents, lang);
   const childNames = registration.children.map((c) => c.fullName).join(", ");
-  const payBy = formatMontreal(opts.payByAt);
+  const payBy = formatMontreal(opts.payByAt, lang);
   const firstName = registration.parentName.split(" ")[0] || registration.parentName;
   const address = etransferAddress();
-  const subject = `Reminder: ${childNames}'s camp spot is held until ${payBy}`;
+  const subject = e.subject(childNames, payBy);
+  const button = m.report.button;
+  const paragraphs = [
+    e.intro(firstName, childNames, registration.reference, payBy),
+    e.alreadySent(button),
+    e.notYetSent(amount, address, registration.reference),
+  ];
 
-  const html = emailShell(`
-    <p style="margin:0 0 16px; font-family:Georgia,'Times New Roman',serif; font-size:20px; font-weight:bold; color:${FOREST};">Your camp spot is still being held</p>
-    <p style="margin:0 0 16px; font-size:14px; color:${INK_SOFT}; line-height:1.6;">Hi ${escapeHtml(firstName)}, we haven't heard that payment was sent for <strong>${escapeHtml(childNames)}</strong> (reference <strong>${escapeHtml(registration.reference)}</strong>). The spot will be released automatically at <strong>${escapeHtml(payBy)}</strong> (Montreal time) so another family can have it.</p>
-    <p style="margin:0 0 12px; font-size:14px; color:${INK_SOFT}; line-height:1.6;"><strong>Already sent your e-Transfer?</strong> Open your reservation page below and tap <strong>&ldquo;I&rsquo;ve Sent My Payment&rdquo;</strong>. That&rsquo;s all we need to keep your spot while we check our bank account.</p>
-    <p style="margin:0 0 20px; font-size:14px; color:${INK_SOFT}; line-height:1.6;"><strong>Haven&rsquo;t sent it yet?</strong> Send ${escapeHtml(amount)} (tax included) by Interac e-Transfer to ${escapeHtml(address)} with the reference ${escapeHtml(registration.reference)} in the message, then tap the same button.</p>
+  const html = emailShell(
+    `
+    <p style="margin:0 0 16px; font-family:Georgia,'Times New Roman',serif; font-size:20px; font-weight:bold; color:${FOREST};">${escapeHtml(e.heading)}</p>
+    ${paragraphs.map((p, i) => `<p style="margin:0 0 ${i === paragraphs.length - 1 ? 20 : 12}px; font-size:14px; color:${INK_SOFT}; line-height:1.6;">${renderRichHtml(p)}</p>`).join("\n    ")}
     <table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 auto 16px;"><tr><td style="border-radius:999px; background:${GOLD};">
-      <a href="${escapeHtml(opts.statusUrl)}" style="display:inline-block; padding:14px 28px; font-size:14px; font-weight:bold; color:#1b1b16; text-decoration:none;">Open my reservation page</a>
+      <a href="${escapeHtml(opts.statusUrl)}" style="display:inline-block; padding:14px 28px; font-size:14px; font-weight:bold; color:#1b1b16; text-decoration:none;">${escapeHtml(e.button)}</a>
     </td></tr></table>
-    <p style="margin:0; font-size:12px; color:${INK_SOFT}; line-height:1.6;">Need more time or have a question? Call ${business.phone}. This button is your private link, so please don&rsquo;t forward this email.</p>
-  `);
-  const text = `Your camp spot is still being held
+    <p style="margin:0; font-size:12px; color:${INK_SOFT}; line-height:1.6;">${escapeHtml(e.footer)}</p>
+  `,
+    lang
+  );
+  const text = `${e.heading}
 
-Hi ${firstName}, we haven't heard that payment was sent for ${childNames} (reference ${registration.reference}). The spot will be released automatically at ${payBy} (Montreal time) so another family can have it.
+${paragraphs.map(renderRichText).join("\n\n")}
 
-ALREADY SENT YOUR E-TRANSFER? Open your reservation page and tap "I've Sent My Payment". That's all we need to keep your spot while we check our bank account.
-
-HAVEN'T SENT IT YET? Send ${amount} (tax included) by Interac e-Transfer to ${address} with the reference ${registration.reference} in the message, then tap the same button.
-
-Your private reservation page (please don't forward this email):
+${e.textLink}
 ${opts.statusUrl}
 
-Need more time or have a question? Call ${business.phone}.`;
+${e.footer}`;
   return { subject, html, text };
 }
 
@@ -453,7 +526,7 @@ export function buildCoachDigestEmail(
   const subject = `${total} new camp registration${total === 1 ? "" : "s"}`;
   const rows = registrations.map((r) => ({
     reference: r.reference,
-    who: `${r.parentName} (${r.children.length} child${r.children.length === 1 ? "" : "ren"}: ${r.children.map((c) => c.fullName).join(", ")})`,
+    who: `${r.parentName}${r.language === "fr" ? " [Français]" : ""} (${r.children.length} child${r.children.length === 1 ? "" : "ren"}: ${r.children.map((c) => c.fullName).join(", ")})`,
     weeks: r.weekIds.map(weekLabel).join("; "),
     amount: `$${formatCents(r.amountDueCents)}`,
   }));

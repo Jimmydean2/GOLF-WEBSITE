@@ -7,11 +7,13 @@ import { adminAlertRecipients } from "./alerts";
 import {
   buildCoachDigestEmail,
   buildCoachNotificationEmail,
+  buildParentCancellationEmail,
   buildParentConfirmationEmail,
   buildParentInstructionsEmail,
   buildParentReleaseNoticeEmail,
   buildParentReminderEmail,
 } from "./campEmailTemplates";
+import { reservationPath } from "./i18n/routes";
 
 // Server-only. The email outbox.
 //
@@ -34,6 +36,7 @@ const POLICY: Record<OutboxKind, { priority: 0 | 1 | 2; giveUpAfterHours: number
   parent_instructions: { priority: 0, giveUpAfterHours: 36 },
   parent_confirmation: { priority: 0, giveUpAfterHours: 24 * 14 },
   parent_release: { priority: 0, giveUpAfterHours: 72 },
+  parent_cancellation: { priority: 0, giveUpAfterHours: 72 },
   parent_reminder: { priority: 1, giveUpAfterHours: 12 },
   coach_notice: { priority: 2, giveUpAfterHours: 48 },
 };
@@ -143,7 +146,7 @@ type OutboxRow = {
   created_at: string;
 };
 
-const PRIORITY_SQL = `CASE kind WHEN 'parent_instructions' THEN 0 WHEN 'parent_confirmation' THEN 0 WHEN 'parent_release' THEN 0 WHEN 'parent_reminder' THEN 1 ELSE 2 END`;
+const PRIORITY_SQL = `CASE kind WHEN 'parent_instructions' THEN 0 WHEN 'parent_confirmation' THEN 0 WHEN 'parent_release' THEN 0 WHEN 'parent_cancellation' THEN 0 WHEN 'parent_reminder' THEN 1 ELSE 2 END`;
 
 type Claim = { row: OutboxRow | null; full: boolean };
 
@@ -247,6 +250,12 @@ function skipReason(kind: OutboxKind, reg: RegistrationDetail, now: Date): strin
       // Only while it is still a released-for-no-report reservation: if the owner has since
       // reinstated or confirmed it, telling the family it was released would be wrong.
       return reg.status === "cancelled" && reg.releaseReason === "expired_unpaid" ? null : `no longer released for lack of a report (${reg.status})`;
+    case "parent_cancellation":
+      // Only while it is still cancelled by the owner: if the registration was reinstated or
+      // confirmed since, telling the family it was cancelled would be wrong.
+      return reg.status === "cancelled" && (reg.releaseReason === "owner_cancelled" || reg.releaseReason === "not_received")
+        ? null
+        : `no longer cancelled by the owner (${reg.status})`;
     case "parent_reminder":
       if (reg.status !== "pending_payment" || reg.paymentReportedAt) return `no longer awaiting a payment report (${reg.status})`;
       if (!reg.holdExpiresAt || new Date(reg.holdExpiresAt).getTime() <= now.getTime()) return "the hold has already ended";
@@ -286,7 +295,8 @@ export async function processOutbox(opts: ProcessOptions = {}): Promise<ProcessS
   const exclude: number[] = [];
 
   const dashboardUrl = () => `${origin}/admin/camp-rosters`;
-  const statusUrl = (id: string) => `${origin}/camp-registration/${makeAccessToken(id)}`;
+  // The family's private page, in the family's language.
+  const statusUrl = (reg: RegistrationDetail) => `${origin}${reservationPath(reg.language, makeAccessToken(reg.id))}`;
 
   const recordFailure = async (row: OutboxRow, err: unknown) => {
     const raw = classifySendError(err);
@@ -426,10 +436,12 @@ export async function processOutbox(opts: ProcessOptions = {}): Promise<ProcessS
         email = buildParentConfirmationEmail(registration);
       } else if (row.kind === "parent_release") {
         email = buildParentReleaseNoticeEmail(registration);
+      } else if (row.kind === "parent_cancellation") {
+        email = buildParentCancellationEmail(registration);
       } else {
         const payByAt = (await getPayByAt(registration.id)) ?? now.toISOString();
         const build = row.kind === "parent_reminder" ? buildParentReminderEmail : buildParentInstructionsEmail;
-        email = build(registration, { statusUrl: statusUrl(registration.id), payByAt });
+        email = build(registration, { statusUrl: statusUrl(registration), payByAt });
       }
       await send({ to: registration.email, ...email });
       await finish([row.id], "sent", now);

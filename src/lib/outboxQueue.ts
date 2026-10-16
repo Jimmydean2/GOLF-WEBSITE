@@ -4,7 +4,13 @@ import type { Pool, PoolClient } from "pg";
 // that an email is owed. Kept apart from outbox.ts (which builds and sends the emails and so
 // depends on the registration code) so the registration code can call it without a cycle.
 
-export type OutboxKind = "parent_instructions" | "parent_confirmation" | "parent_reminder" | "parent_release" | "coach_notice";
+export type OutboxKind =
+  | "parent_instructions"
+  | "parent_confirmation"
+  | "parent_reminder"
+  | "parent_release"
+  | "parent_cancellation"
+  | "coach_notice";
 
 // Idempotent: the same key is only ever stored once. Call it inside the transaction that
 // creates the reason for the email, so the two succeed or fail together.

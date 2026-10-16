@@ -7,7 +7,10 @@ import { logError } from "@/lib/safeLog";
 // POST /api/admin/camp-registrations/[id]/cancel
 // The administrator's Release: frees the spots. With { notReceived: true } it is recorded
 // as "payment not received" (and, for a reported claim, counts as a strike against that
-// contact); otherwise it is a plain cancellation. Needs login and a recent password check.
+// contact); otherwise it is a plain cancellation. By default the family is also sent a
+// notice in their language (they may have paid and be waiting); { notifyParent: false } skips
+// it, for example when the owner has already spoken to them. Needs login and a recent password
+// check.
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const guard = await requireAdmin(request, { fresh: true });
   if (!guard.ok) return guard.response;
@@ -23,11 +26,15 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     // reason is optional: an empty body is fine
   }
   const notReceived = body.notReceived === true;
+  const notifyParent = body.notifyParent !== false;
   const reason =
     String(body.reason ?? "").trim() || (notReceived ? "Payment not received" : "Cancelled by admin");
 
   try {
-    const result = await cancelRegistration(id, reason, { releaseReason: notReceived ? "not_received" : "owner_cancelled" });
+    const result = await cancelRegistration(id, reason, {
+      releaseReason: notReceived ? "not_received" : "owner_cancelled",
+      notifyParent,
+    });
     if (!result.ok) {
       return NextResponse.json({ error: "Registration not found." }, { status: 404 });
     }

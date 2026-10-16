@@ -54,6 +54,12 @@ export function joinNames(items: string[], lang: Lang): string {
   return `${items.slice(0, -1).join(", ")}${word}${items[items.length - 1]}`;
 }
 
+// "de" before a name, with the elision French requires before a vowel: "de Léa", "d’Émilie".
+// (A leading h is left alone: names such as Hugo and Henri are written both ways.)
+export function dePrefix(name: string): string {
+  return /^[aeiouyàâäéèêëîïôöùûüœæ]/i.test(name.trim()) ? "d’" : "de ";
+}
+
 // French typography as Quebec writes it (Office québécois de la langue française): a no-break
 // space before a colon, inside guillemets, before a percent sign and a dollar sign, and in a
 // time of day. Applied to every French string when the dictionary is built, so the text can be

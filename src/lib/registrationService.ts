@@ -1,4 +1,4 @@
-import { business, juniorCamps } from "./content";
+import { juniorCamps } from "./content";
 import { isDatabaseConfigured } from "./db";
 import {
   childKey,
@@ -17,7 +17,9 @@ import { inCalendarOrder } from "./weeks";
 import { logError } from "./safeLog";
 import { registrationWindow } from "./registrationWindow";
 import { formatMontreal } from "./payment";
-import { season } from "./season";
+import { labelForWeekId, season } from "./season";
+import { parseLang, type Lang } from "./lang";
+import { getMessages, reservationPath, type Messages } from "./i18n";
 
 // Server-only. Everything the registration form's POST does, kept apart from the Next.js
 // route file so it can be exercised directly (and under load) without a web server.
@@ -47,7 +49,6 @@ export const REGISTRATION_LIMITS = {
 } as const;
 
 const VALID_WEEKS: string[] = juniorCamps.weeks.map((w) => w.id);
-const weekLabel = (id: string) => juniorCamps.weeks.find((w) => w.id === id)?.label ?? id;
 
 // --- validation -----------------------------------------------------------------------
 
@@ -73,10 +74,11 @@ function text(value: unknown): string {
   return typeof value === "string" ? value.trim() : value == null ? "" : String(value).trim();
 }
 
-export function validateRegistrationBody(body: Record<string, unknown>, now: Date = new Date()): ValidationResult {
+export function validateRegistrationBody(body: Record<string, unknown>, now: Date = new Date(), lang: Lang = "en"): ValidationResult {
+  const m: Messages["errors"] = getMessages(lang).errors;
   const idempotencyKey = text(body.idempotencyKey);
   if (!/^[A-Za-z0-9_-]{8,80}$/.test(idempotencyKey)) {
-    return fail("invalid_request", "Invalid request (missing idempotency key).");
+    return fail("invalid_request", lang === "en" ? "Invalid request (missing idempotency key)." : m.invalidRequest);
   }
 
   const parentName = text(body.parentName);
@@ -100,7 +102,7 @@ export function validateRegistrationBody(body: Record<string, unknown>, now: Dat
     !parentName || !email || !primaryPhone || !emergencyName || !emergencyRelationship || !emergencyPhone ||
     weekIds.length === 0 || children.length === 0 || children.some((c) => c === null)
   ) {
-    return fail("missing_fields", "Please fill in all required fields, add at least one child, and pick at least one camp week.");
+    return fail("missing_fields", m.missingFields);
   }
   const kids = children as ReserveChildInput[];
 
@@ -110,39 +112,36 @@ export function validateRegistrationBody(body: Record<string, unknown>, now: Dat
     emergencyRelationship.length > MAX.relationship ||
     kids.some((c) => c.fullName.length > MAX.name || c.age.length > MAX.age || c.healthInfo.length > MAX.health)
   ) {
-    return fail("too_long", "Some of the information entered is too long. Please shorten it and try again.");
+    return fail("too_long", m.tooLong);
   }
-  if (!isValidEmail(email)) return fail("invalid_email", "Please enter a valid email address.");
+  if (!isValidEmail(email)) return fail("invalid_email", m.invalidEmail);
 
   // The owner phones families, and the same phone number links a family's reservations: a number
   // with no area code, or with letters in it, helps nobody.
   const phoneDigits = (value: string) => value.replace(/\D/g, "").length;
   const badPhone = (value: string, required: boolean) => (required || value !== "") && (phoneDigits(value) < 10 || phoneDigits(value) > 15 || /[A-Za-z]/.test(value));
   if (badPhone(primaryPhone, true) || badPhone(emergencyPhone, true) || badPhone(secondaryPhone, false)) {
-    return fail("invalid_phone", "Please enter each phone number with its area code, for example 514-555-0100.");
+    return fail("invalid_phone", m.invalidPhone);
   }
 
   if (body.codeOfConductAccepted !== true || body.consentAccepted !== true) {
-    return fail("consent_required", "Please accept the code of conduct and information consent to continue.");
+    return fail("consent_required", m.consentRequired);
   }
-  if (weekIds.some((w) => !VALID_WEEKS.includes(w))) return fail("invalid_weeks", "Please pick valid camp weeks.");
+  if (weekIds.some((w) => !VALID_WEEKS.includes(w))) return fail("invalid_weeks", m.invalidWeeks);
 
   if (kids.length > REGISTRATION_LIMITS.maxChildrenPerSubmission) {
-    return fail(
-      "too_many_children",
-      `One registration can include up to ${REGISTRATION_LIMITS.maxChildrenPerSubmission} children. For a larger group, please contact us at ${business.phone}.`
-    );
+    return fail("too_many_children", m.tooManyChildren(REGISTRATION_LIMITS.maxChildrenPerSubmission));
   }
   for (const child of kids) {
     if (!isPlausibleBirthDate(child.dateOfBirth, now)) {
-      return fail("invalid_birth_date", `Please check the date of birth for ${child.fullName}.`);
+      return fail("invalid_birth_date", m.invalidBirthDate(child.fullName));
     }
   }
   const seen = new Set<string>();
   for (const child of kids) {
     const key = childKey(child.fullName, child.dateOfBirth);
     if (seen.has(key)) {
-      return fail("duplicate_child", `${child.fullName} appears twice. Please list each child once.`);
+      return fail("duplicate_child", m.duplicateChild(child.fullName));
     }
     seen.add(key);
   }
@@ -160,6 +159,7 @@ export function validateRegistrationBody(body: Record<string, unknown>, now: Dat
       emergencyPhone,
       codeOfConductAccepted: true,
       consentAccepted: true,
+      language: lang,
       children: kids,
       weekIds,
     },
@@ -185,23 +185,34 @@ function json(body: Record<string, unknown>, status = 200, headers?: Record<stri
   return Response.json(body, { status, headers });
 }
 
-function listNames(names: string[]): string {
-  const shown = names.slice(0, 3);
-  const more = names.length - shown.length;
-  return shown.join(", ") + (more > 0 ? ` and ${more} more` : "");
-}
-
 export async function handleRegistrationRequest(request: Request, hooks: RegistrationHooks = {}): Promise<Response> {
+  // The size check needs no language; everything after it answers in the family's language,
+  // which is read from the body ("en" or "fr"; anything else is English).
+  if (Number(request.headers.get("content-length") ?? 0) > REGISTRATION_LIMITS.maxBodyBytes) {
+    return json({ error: getMessages("en").errors.tooLarge, code: "too_large" }, 413);
+  }
+  let body: unknown;
+  try {
+    body = await request.json();
+  } catch {
+    return json({ error: getMessages("en").errors.invalidRequest, code: "invalid_request" }, 400);
+  }
+  if (!body || typeof body !== "object" || Array.isArray(body)) {
+    return json({ error: getMessages("en").errors.invalidRequest, code: "invalid_request" }, 400);
+  }
+  const lang = parseLang((body as Record<string, unknown>).language);
+  const m = getMessages(lang).errors;
+
   // Postgres is the authoritative store for capacity and registrations (see campDb.ts).
-  // Google Sheets is a best-effort reporting copy only.
+  // Google Sheets is an optional reporting copy only, never consulted.
   if (!isDatabaseConfigured()) {
-    return json({ error: "Online registration isn't set up yet. Please call or email instead.", code: "unavailable" }, 503);
+    return json({ error: m.unavailable, code: "unavailable" }, 503);
   }
   // Every reservation is given a private link; without the key that signs it, a reservation
   // would be created that its parent could never reach. Refuse up front instead.
   if (!isRegistrationLinkConfigured()) {
     console.error("REGISTRATION_LINK_SECRET is missing or shorter than 16 characters: registration is switched off.");
-    return json({ error: "Online registration isn't set up yet. Please call or email instead.", code: "unavailable" }, 503);
+    return json({ error: m.unavailable, code: "unavailable" }, 503);
   }
 
   // Is registration open at all? A draft calendar, or an opening time still ahead, is refused
@@ -210,10 +221,7 @@ export async function handleRegistrationRequest(request: Request, hooks: Registr
   if (opening.state !== "open") {
     return json(
       {
-        error:
-          opening.state === "opens_later"
-            ? `Registration opens ${formatMontreal(opening.opensAt)} (Montreal time). Please come back then.`
-            : `Registration for the ${season.year} camps has not opened yet. Please check back soon, or call ${business.phone}.`,
+        error: opening.state === "opens_later" ? m.opensLater(formatMontreal(opening.opensAt, lang)) : m.notAnnounced(season.year),
         code: "registration_not_open",
         ...(opening.state === "opens_later" ? { opensAt: opening.opensAt } : {}),
       },
@@ -221,21 +229,8 @@ export async function handleRegistrationRequest(request: Request, hooks: Registr
     );
   }
 
-  if (Number(request.headers.get("content-length") ?? 0) > REGISTRATION_LIMITS.maxBodyBytes) {
-    return json({ error: "That request was too large.", code: "too_large" }, 413);
-  }
-  let body: unknown;
-  try {
-    body = await request.json();
-  } catch {
-    return json({ error: "Invalid request.", code: "invalid_request" }, 400);
-  }
-  if (!body || typeof body !== "object" || Array.isArray(body)) {
-    return json({ error: "Invalid request.", code: "invalid_request" }, 400);
-  }
-
   // 1. A mistake in the form is free.
-  const parsed = validateRegistrationBody(body as Record<string, unknown>, hooks.now);
+  const parsed = validateRegistrationBody(body as Record<string, unknown>, hooks.now, lang);
   if (!parsed.ok) return json({ error: parsed.error, code: parsed.code }, 400);
   const input = parsed.value;
 
@@ -244,11 +239,7 @@ export async function handleRegistrationRequest(request: Request, hooks: Registr
   // limit would then throttle the whole site. The per-email limit still applies.
   const ipKnown = ip !== "unknown";
   const tooMany = (hit: RateLimitResult) =>
-    json(
-      { error: "Too many registrations from this connection just now. Please wait a little while, or contact us directly.", code: "rate_limited" },
-      429,
-      { "Retry-After": String(hit.retryAfterSeconds) }
-    );
+    json({ error: m.rateLimited, code: "rate_limited" }, 429, { "Retry-After": String(hit.retryAfterSeconds) });
   const origin = siteOrigin(request.url);
   const defer = hooks.defer ?? ((task: () => Promise<unknown>) => void task().catch(() => {}));
   const runAfter = (label: string, task: () => Promise<unknown> | unknown) =>
@@ -266,7 +257,7 @@ export async function handleRegistrationRequest(request: Request, hooks: Registr
       reference: result.reference,
       amountDueCents: result.amountDueCents,
       payByAt: result.payByAt,
-      statusPath: `/camp-registration/${makeAccessToken(result.registrationId)}`,
+      statusPath: reservationPath(lang, makeAccessToken(result.registrationId)),
     });
 
   const taken: RateLimitResult[] = [];
@@ -285,7 +276,7 @@ export async function handleRegistrationRequest(request: Request, hooks: Registr
     const replay = await findExistingReservation(input.idempotencyKey, input.email);
     if (replay) {
       if (replay.ok) return reply(replay);
-      return json({ error: "Invalid request.", code: "invalid_request" }, 400);
+      return json({ error: m.invalidRequest, code: "invalid_request" }, 400);
     }
 
     // 3. Counting starts here: this is an attempt to make a new reservation.
@@ -304,17 +295,11 @@ export async function handleRegistrationRequest(request: Request, hooks: Registr
       await handBack();
       switch (result.reason) {
         case "too_many_open":
-          return json(
-            {
-              error: `There are already several reservations under this email or phone number that haven't been confirmed yet. Please finish paying for those (or wait until we've confirmed them), or contact us at ${business.phone}.`,
-              code: "too_many_open",
-            },
-            429
-          );
+          return json({ error: m.tooManyOpen, code: "too_many_open" }, 429);
         case "weeks_full":
           return json(
             {
-              error: `These weeks just filled up: ${result.fullWeekIds.map(weekLabel).join("; ")}. Please remove them and try again.`,
+              error: m.weeksFull(result.fullWeekIds.map((id) => labelForWeekId(id, lang))),
               code: "weeks_full",
               weekIds: result.fullWeekIds,
             },
@@ -323,35 +308,25 @@ export async function handleRegistrationRequest(request: Request, hooks: Registr
         case "weeks_unavailable":
           return json(
             {
-              error: `These weeks aren't available: ${result.unavailableWeekIds.map(weekLabel).join("; ")}. Please remove them and try again.`,
+              error: m.weeksUnavailable(result.unavailableWeekIds.map((id) => labelForWeekId(id, lang))),
               code: "weeks_unavailable",
               weekIds: result.unavailableWeekIds,
             },
             409
           );
         case "already_registered": {
-          const weeks = inCalendarOrder([...new Set(result.conflicts.flatMap((c) => c.weekIds))]).map(weekLabel);
-          const names = listNames(result.conflicts.map((c) => c.childName));
-          if (result.openRegistrationIds.length > 0) {
+          const weeks = inCalendarOrder([...new Set(result.conflicts.flatMap((c) => c.weekIds))]).map((id) => labelForWeekId(id, lang));
+          const names = result.conflicts.map((c) => c.childName);
+          const resent = result.openRegistrationIds.length > 0;
+          if (resent) {
             runAfter("Re-sending payment instructions", () =>
               hooks.onDuplicate?.({ registrationIds: result.openRegistrationIds, origin })
             );
           }
-          return json(
-            {
-              error:
-                `We already have a reservation for ${names} for ${weeks.join("; ")} under this email address or phone number, so we haven't made a second one. ` +
-                (result.openRegistrationIds.length > 0
-                  ? "If it is still unpaid, we are sending you its payment instructions and private link again: please check your inbox and your junk folder. "
-                  : "") +
-                `To change something, call us at ${business.phone}.`,
-              code: "already_registered",
-            },
-            409
-          );
+          return json({ error: m.alreadyRegistered(names, weeks, resent), code: "already_registered" }, 409);
         }
         case "idempotency_conflict":
-          return json({ error: "Invalid request.", code: "invalid_request" }, 400);
+          return json({ error: m.invalidRequest, code: "invalid_request" }, 400);
       }
     }
 
@@ -366,9 +341,6 @@ export async function handleRegistrationRequest(request: Request, hooks: Registr
   } catch (err) {
     await handBack();
     logError("Camp registration failed:", err);
-    return json(
-      { error: "Something went wrong submitting your registration. Please try again or contact us directly.", code: "server_error" },
-      502
-    );
+    return json({ error: m.serverError, code: "server_error" }, 502);
   }
 }

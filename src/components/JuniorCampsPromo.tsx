@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { juniorCamps, locations } from "@/lib/content";
 import { formatMontreal } from "@/lib/payment";
+import { campsPath } from "@/lib/i18n/routes";
 
 const SEEN_KEY = "jdg-camp-promo-seen";
 
@@ -87,6 +88,10 @@ export default function JuniorCampsPromo({ year, show, opensAt }: PromoProps) {
           >
             See camp dates &rarr;
           </Link>
+          {" "}
+          <a href={campsPath("fr")} lang="fr" hrefLang="fr-CA" className="text-xs font-semibold text-cream/80 underline underline-offset-2">
+            En français
+          </a>
         </div>
         <button
           type="button"
@@ -153,6 +158,9 @@ export default function JuniorCampsPromo({ year, show, opensAt }: PromoProps) {
           >
             See Camp Dates
           </Link>
+          <a href={campsPath("fr")} lang="fr" hrefLang="fr-CA" className="mt-2 inline-block text-xs font-semibold text-cream/80 underline underline-offset-2 hover:text-gold-light">
+            Inscription en français
+          </a>
           <p className="mt-3 text-[0.65rem] text-cream/70">
             Spots are limited and subject to availability.
           </p>

@@ -265,7 +265,7 @@ console.log("\n=== 9. The reminder: one gentle nudge, only to families who still
   const reminder = m.sent.find((x) => /reminder/i.test(x.subject));
   check("the reminder goes to that parent", reminder?.to === "needs@example.test");
   check("it says when the spot is released and gives the private link", /held until/.test(reminder.subject) && /camp-registration\//.test(reminder.text) && /released automatically at/.test(reminder.text));
-  check("it tells a family that already paid what to do (tap the button)", /Already sent your e-Transfer\?/i.test(reminder.text) && /I've Sent My Payment/.test(reminder.text));
+  check("it tells a family that already paid what to do (tap the button)", /Already sent your e-Transfer\?/i.test(reminder.text) && /I.ve Sent My Payment/.test(reminder.text));
   check("it contains no link that changes anything (only the private page)", (reminder.text.match(/https?:\/\/\S+/g) ?? []).every((u) => /\/camp-registration\/[^/]+$/.test(u)), reminder.text.match(/https?:\/\/\S+/g)?.join(" "));
 
   // A reminder queued but not yet sent loses its point if the parent reports in the meantime.
