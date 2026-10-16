@@ -21,10 +21,14 @@ export function getPool(): Pool {
   }
   if (!pool) {
     const isLocal = /localhost|127\.0\.0\.1/.test(connectionString);
+    // Always 1 in production (see above). DB_POOL_MAX exists only so the
+    // concurrency tests can open many real connections at once — with a pool of
+    // 1, "simultaneous" requests are actually run one after another.
+    const max = Number(process.env.DB_POOL_MAX) || 1;
     pool = new Pool({
       connectionString,
       ssl: isLocal ? false : { rejectUnauthorized: false },
-      max: 1,
+      max,
     });
   }
   return pool;
@@ -33,4 +37,15 @@ export function getPool(): Pool {
 // Postgres error code for a unique-constraint violation.
 export function isUniqueViolation(err: unknown): boolean {
   return Boolean(err && typeof err === "object" && "code" in err && (err as { code: string }).code === "23505");
+}
+
+// db/migrations/003_capacity_integrity.sql makes the database itself refuse to
+// put more active spots in a week than its capacity (error code 23514,
+// constraint "camp_week_capacity", DETAIL "week_id=<id>"). Returns that week's
+// id when `err` is such a refusal, otherwise null.
+export function capacityViolationWeek(err: unknown): string | null {
+  if (!err || typeof err !== "object") return null;
+  const e = err as { code?: string; constraint?: string; detail?: string };
+  if (e.code !== "23514" || e.constraint !== "camp_week_capacity") return null;
+  return /week_id=([\w-]+)/.exec(e.detail ?? "")?.[1] ?? "unknown";
 }
