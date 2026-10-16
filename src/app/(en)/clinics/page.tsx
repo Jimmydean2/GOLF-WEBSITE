@@ -91,8 +91,8 @@ export default function ClinicsPage() {
               Sign Up for a Clinic
             </h2>
             <p className="mt-3 text-ink-soft">
-              Submit your info below and Coach James will reach out to
-              confirm your spot and collect payment.
+              Each series is limited to {groupClinics.maxParticipants} people.
+              Reserve your spot below.
             </p>
           </div>
 

@@ -19,9 +19,8 @@ export default function BookPage() {
             Book a Lesson
           </h1>
           <p className="mx-auto mt-4 max-w-xl text-ink-soft">
-            Pick a day and time that works for you &mdash; book a single
-            lesson or a recurring weekly spot, added straight to Coach
-            James&apos;s calendar.
+            Book a single lesson or a recurring weekly spot with Coach
+            James.
           </p>
         </div>
 

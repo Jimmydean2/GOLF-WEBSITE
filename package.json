@@ -34,13 +34,14 @@
     "test:i18n": "tsx db/tests/i18n.test.mjs",
     "test:privacy": "tsx db/tests/privacy.test.mjs",
     "test:mutations": "tsx db/tests/mutation-check.mjs",
-    "test": "npm run test:season && npm run test:i18n && npm run test:privacy && npm run test:log-safety && npm run test:payment-integrity && npm run test:payment-policy && npm run test:admin-security && npm run test:alerts && npm run test:families && npm run test:registration-flow && npm run test:outbox && npm run test:scheduler && npm run test:no-auto-release && npm run test:pool-of-one && npm run test:smtp-stack && npm run test:concurrency && npm run test:xlsx-safety && npm run test:roster-export && npm run test:waitlist && npm run test:http-privacy && npm run test:roster-http && npm run test:waitlist-http && npm run test:manual-confirm && npm run test:manual-confirm-http && npm run test:opening-day && npm run test:launch-http && npm run test:rehearsal-kit",
+    "test": "npm run test:season && npm run test:i18n && npm run test:privacy && npm run test:log-safety && npm run test:payment-integrity && npm run test:payment-policy && npm run test:admin-security && npm run test:alerts && npm run test:families && npm run test:registration-flow && npm run test:outbox && npm run test:scheduler && npm run test:no-auto-release && npm run test:pool-of-one && npm run test:smtp-stack && npm run test:concurrency && npm run test:xlsx-safety && npm run test:roster-export && npm run test:waitlist && npm run test:http-privacy && npm run test:roster-http && npm run test:waitlist-http && npm run test:manual-confirm && npm run test:manual-confirm-http && npm run test:opening-day && npm run test:launch-http && npm run test:rehearsal-kit && npm run test:launch-mode",
     "test:roster-export": "tsx db/tests/roster-export.test.mjs",
     "test:roster-http": "tsx db/tests/roster-http.test.mjs",
     "test:manual-confirm": "tsx db/tests/manual-confirm.test.mjs",
     "test:manual-confirm-http": "tsx db/tests/manual-confirm-http.test.mjs",
     "test:waitlist": "tsx db/tests/waitlist.test.mjs",
-    "test:waitlist-http": "tsx db/tests/waitlist-http.test.mjs"
+    "test:waitlist-http": "tsx db/tests/waitlist-http.test.mjs",
+    "test:launch-mode": "tsx db/tests/launch-mode.test.mjs"
   },
   "dependencies": {
     "exceljs": "^4.4.0",
