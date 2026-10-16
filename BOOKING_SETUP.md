@@ -96,19 +96,27 @@ left" counter on the Junior Camps page.
 
 ---
 
-## Step 4: Connect email for camp payment confirmations (~3 minutes)
+## Step 4: Connect email for camp registrations and payment alerts (~3 minutes)
 
-This is what makes camp registration "automatic": the moment a parent
-registers, you get an email with their details and an **Open the admin
-dashboard** button. Once you can see their e-transfer in your bank account,
-open the dashboard, find the registration, and click **Confirm payment
-received** — that confirms every week in the registration and emails the
-parent a full confirmation with their confirmed dates, drop-off/pick-up
-times, what to bring, and safety info. The email itself never confirms
-anything (clicking or previewing an email can't change a payment), and only
-you, logged in, can confirm. Nothing changes about how you actually get paid
-— parents still e-transfer you directly, no processing fees, no new payment
-account.
+This is what makes camp registration run smoothly. The moment a parent
+registers, they get an email with the Interac e-Transfer instructions, their
+own payment reference (like `GD-7K4M2Q`) and a private link to their
+reservation page; you get an email with their details. Their spots are held
+for 12 hours. When they've sent the e-Transfer they tap **I've Sent My
+Payment** (no account, no screenshots), you get an alert, and their spots are
+protected for 48 hours while you check your bank account.
+
+Once you can see the deposit in your bank account, open the dashboard, find
+the registration, and click **Confirm payment** — that records what you
+verified, confirms every week in the registration, and emails the parent a
+full confirmation with their dates, drop-off/pick-up times, what to bring, and
+safety info. The website never marks anything paid by itself, no email link can
+change a payment, and only you, logged in, can confirm. If a reported payment
+sits unchecked past 48 hours, nothing is released behind your back: it's
+flagged for urgent review and you get louder and louder reminder emails (see
+`docs/PAYMENT_REVIEW_RUNBOOK.md` for exactly what to do at each stage).
+Nothing changes about how you actually get paid — parents still e-transfer you
+directly, no processing fees, no new payment account.
 
 This uses your own Gmail account to send the emails, via something called
 an "App Password" (a special password just for this website — it doesn't
@@ -131,13 +139,17 @@ This gives you a private page, **yoursite.com/admin/camp-rosters**, where
 you can download a print-ready roster workbook any time — one sheet per
 camp week, every registered camper's name, age, parent, phone numbers,
 emergency contact, allergy notes, and paid status already filled in from
-real sign-ups, plus 30 blank rows total per week so you can hand it
+real sign-ups, plus blank rows (at least 30 per week) so you can hand it
 straight to whoever's working that week. It's always current — download
 it again any time and it reflects every registration up to that second.
 
-Just pick any password and send it to me along with the other items
-below — no account to create, nothing to click through. Keep it private;
-anyone with it can see campers' contact and health info.
+This same page is where you review and confirm camp payments, so please pick
+a **long, unique password** (a few random words is fine) that you use nowhere
+else, and send it to me along with the other items below — no account to
+create, nothing to click through. Keep it private; anyone with it can see
+campers' contact and health info and confirm payments. The login locks for 15
+minutes after five wrong tries, payment actions ask for the password again,
+and there is a **Log out everywhere** button if a device is ever lost.
 
 ---
 
@@ -146,7 +158,11 @@ anyone with it can see campers' contact and health info.
 Camp registration now runs on its own small database instead of counting
 rows in a spreadsheet — this is what makes the "never more than 30 kids
 in a week" rule hold up even if dozens of parents hit submit at the exact
-same second (tested up to 100 at once; see the readiness report). Without
+same second (tested up to 100 at once; see the readiness report). The
+database also enforces the payment rules: a registration can't be marked paid
+without a verified deposit on record, and the audit log can't be edited. A
+week can only go above 30 (to a maximum of 33) when you authorize it with a
+written reason. Without
 this step, the registration form and the live spots-remaining counts on
 the Junior Camps page won't work — everything else on the site (lessons,
 clinics, the rest of the pages) works fine either way.
@@ -169,11 +185,31 @@ Send me that connection string along with the other items below, and
 I'll both add it to the hosting environment and run the one-time setup
 (`npm run db:migrate`) that creates the camp registration tables, the 10
 weeks' worth of seed data, and the database-level capacity and payment
-safety rules (`003_capacity_integrity.sql`) — nothing further for you to do.
+safety rules (`003_capacity_integrity.sql` and `004_payment_policy.sql`) —
+nothing further for you to do.
 
 ---
 
-## Send me eight things and I'll wire it all in
+## Step 7: Your Interac e-Transfer details (~2 minutes)
+
+Three quick answers so the parent's instructions and your alerts are right:
+
+1. **Which email address do parents send the e-Transfer to?** (If you don't
+   say, I'll use your business email.)
+2. **Is Autodeposit turned on for that address at your bank?** If yes, parents
+   don't need a security question. If you're not sure, say so — I'll leave it
+   off, and the instructions just tell parents to send the e-Transfer and tap
+   **I've Sent My Payment**.
+3. **Who should receive the payment alerts?** Your own email, plus ideally a
+   backup person's email so an alert is never seen by only one inbox.
+
+(I'll also generate two private random keys for the hosting settings
+myself — one that signs each parent's private reservation link, one that
+protects the scheduled payment check. You don't need to do anything for them.)
+
+---
+
+## Send me these things and I'll wire it all in
 
 - The `client_email` value from the JSON file (Step 1)
 - The `private_key` value from the JSON file (the whole thing, including
@@ -184,12 +220,15 @@ safety rules (`003_capacity_integrity.sql`) — nothing further for you to do.
 - The 16-character App Password (Step 4)
 - Your chosen admin password (Step 5)
 - The database connection string (Step 6)
+- Your three e-Transfer answers (Step 7)
 
 These get set as private environment variables on the hosting side (never
 committed to the code), matching the names in `.env.local.example` in this
 repo: `GOOGLE_SERVICE_ACCOUNT_CLIENT_EMAIL`, `GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY`,
 `GOOGLE_CALENDAR_ID`, `GOOGLE_SHEETS_SHEET_ID`, `GMAIL_USER`, `GMAIL_APP_PASSWORD`,
-`ADMIN_PASSWORD`, `DATABASE_URL`.
+`ADMIN_PASSWORD`, `DATABASE_URL`, `ETRANSFER_EMAIL`, `ETRANSFER_AUTODEPOSIT`,
+`ADMIN_ALERT_EMAILS`, plus two keys I generate: `REGISTRATION_LINK_SECRET` and
+`CRON_SECRET`.
 
 Once those are set:
 - The **Book a Lesson** page shows a real month calendar of your actual open
@@ -198,28 +237,36 @@ Once those are set:
 - The **Clinics** page automatically shows live spots-remaining per month
   and disables a cohort once it hits 10 sign-ups.
 - The **Junior Camps** page automatically shows live spots-remaining per
-  week and disables a week once it hits 30 registrations. Each week tile
+  week and disables a week once it is full (30 children, or the higher number
+  you've authorized for that week, up to 33). Each week tile
   on the page is clickable and jumps straight to the registration form
   with that week pre-selected. Parents can select multiple weeks in that
   same form — filling out their info once — and the running total price
   updates live as they add or remove weeks.
 - Every booking, sign-up, or registration appends a row to your sheet — no
   further setup needed.
-- Every camp registration also emails you a link to your admin dashboard;
-  once the e-transfer is showing in your bank account, **Confirm payment
-  received** there automatically emails the parent their full confirmation
-  (dates, drop-off/pick-up times, what to bring, safety info). Confirming a
-  second time is harmless — it won't send a duplicate email. If a
-  registration was released and the family turns out to have paid, the same
-  button restores their spots — but only if the week still has room; if it
-  doesn't, nothing changes and the dashboard tells you why.
+- Every camp registration sends the parent their Interac instructions and
+  private reservation page, and tells you about it. Once the e-transfer is
+  showing in your bank account, **Confirm payment** in the **Payment review**
+  box at the top of the admin page records what you verified and emails the
+  parent their full confirmation (dates, drop-off/pick-up times, what to
+  bring, safety info). Confirming a second time is harmless — it won't send a
+  duplicate email. A parent who reports payment is protected for 48 hours;
+  after that the registration is flagged overdue and you get escalating
+  reminders, but it is never released or marked paid automatically. You can
+  **Extend review** (with a note) for a delayed transfer, or **Release** it if
+  the money never arrives. If a registration was released and the family turns
+  out to have paid, **Reinstate & confirm payment** restores their spots — but
+  only if the week still has room; if it doesn't, nothing changes and the
+  dashboard tells you why.
 - **yoursite.com/admin/camp-rosters** (behind your admin password) lets
   you download a printable roster workbook any time, one sheet per camp
   week, auto-filled with every current registration — always up to date,
   no manual copying. The same page also lets you search for a family's
-  registration and cancel it, resend either email, check a camper in,
-  adjust a week's price/capacity/open status, and see a log of every
-  admin action taken.
+  registration (by name or payment reference) and cancel it, resend either
+  email, check a camper in, adjust a week's price, open status and capacity
+  (up to 30 freely; 31 to 33 only with a written reason), and see a log of
+  every admin action taken.
 
 ---
 
@@ -249,12 +296,12 @@ GitHub is a few clicks with nothing to configure.
    Vercel automatically redeploys the live site within a minute or two —
    nothing further to click.
 
-Once live, go back to **Step 1–5** above whenever you're ready: send me
-the seven items and I'll add them as private settings in the Vercel
+Once live, go back to **Steps 1–7** above whenever you're ready: send me
+the items listed above and I'll add them as private settings in the Vercel
 project (**Settings → Environment Variables**) myself, or walk you
 through adding them there directly if you'd rather handle it yourself.
 
-Until both the deployment and the seven credentials are in place, the
+Until both the deployment and the credentials are in place, the
 site gracefully shows a "reserve by phone/email" fallback in the booking
 spots, so nothing looks broken or half-finished in the meantime — you can
 publish now and wire up live booking whenever the credentials are ready.
