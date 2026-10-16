@@ -15,9 +15,14 @@ import { getPool } from "../../src/lib/db.ts";
 import {
   reserveRegistration,
   cancelRegistration,
-  markRegistrationPaid,
+  confirmRegistrationPayment,
   adjustWeekCapacity,
 } from "../../src/lib/campDb.ts";
+
+// getPool() normally holds ONE connection (production setting), which would run
+// the "simultaneous" requests below one after another. Use real parallel
+// connections so these bursts genuinely race in Postgres.
+process.env.DB_POOL_MAX ||= "40";
 
 if (!process.env.DATABASE_URL) {
   console.error("DATABASE_URL is not set. Point it at a disposable test database before running this.");
@@ -34,11 +39,11 @@ function check(label, condition, detail) {
 }
 
 async function resetAll() {
-  await pool.query(`DELETE FROM registration_spots`);
-  await pool.query(`DELETE FROM children`);
+  // Deleting registrations cascades to their children and spots; the database
+  // frees each spot's capacity as it goes, so taken_count returns to 0 by itself.
   await pool.query(`DELETE FROM registrations`);
   await pool.query(`DELETE FROM admin_audit_log`);
-  await pool.query(`UPDATE camp_weeks SET taken_count = 0, max_capacity = 30, price_cents = 38000, is_open = true`);
+  await pool.query(`UPDATE camp_weeks SET max_capacity = 30, price_cents = 38000, is_open = true`);
 }
 
 function basicRegistrant(label, overrides = {}) {
@@ -212,24 +217,23 @@ console.log("\n=== Cancellation releases capacity atomically and is fully reusab
   check("released capacity fully reusable (30/30)", finalCount.taken_count === 30, `got ${finalCount.taken_count}`);
 }
 
-console.log("\n=== markRegistrationPaid is idempotent (duplicate click / duplicate notification) ===");
+console.log("\n=== confirmRegistrationPayment is idempotent (duplicate click / two tabs at once) ===");
 {
   await resetAll();
   const reg = await reserveRegistration(basicRegistrant("paid", { weekIds: ["aug24"] }));
   const [r1, r2] = await Promise.all([
-    markRegistrationPaid(reg.registrationId, reg.confirmToken),
-    markRegistrationPaid(reg.registrationId, reg.confirmToken),
+    confirmRegistrationPayment(reg.registrationId),
+    confirmRegistrationPayment(reg.registrationId),
   ]);
-  check("both calls succeeded", r1 !== null && r2 !== null);
+  check("both calls succeeded", r1.ok && r2.ok);
   check(
     "exactly one reports alreadyPaid=false, the other true",
-    (r1.alreadyPaid === false && r2.alreadyPaid === true) || (r1.alreadyPaid === true && r2.alreadyPaid === false)
+    r1.ok && r2.ok && ((r1.alreadyPaid === false && r2.alreadyPaid === true) || (r1.alreadyPaid === true && r2.alreadyPaid === false))
   );
   const final = (await pool.query(`SELECT status FROM registrations WHERE id=$1`, [reg.registrationId])).rows[0];
   check("final status is paid, not corrupted", final.status === "paid");
-
-  const wrongToken = await markRegistrationPaid(reg.registrationId, "wrong-token-12345");
-  check("wrong confirm token is rejected", wrongToken === null);
+  const audit = (await pool.query(`SELECT count(*)::int AS n FROM admin_audit_log WHERE target_id=$1 AND action='confirm_payment'`, [reg.registrationId])).rows[0];
+  check("only one confirm_payment audit entry", audit.n === 1, `got ${audit.n}`);
 }
 
 console.log("\n=== Admin cannot shrink capacity below the already-taken count ===");
