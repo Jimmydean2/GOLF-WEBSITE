@@ -1,5 +1,5 @@
 import { getRegistrationSnapshot } from "./campDb";
-import { appendCampRegistration, isGoogleSheetsConfigured } from "./googleSheets";
+import { appendCampRegistration, isCampSheetsCopyEnabled } from "./googleSheets";
 import { enqueueInstructionsResend, processOutbox } from "./outbox";
 import { logError } from "./safeLog";
 
@@ -9,9 +9,10 @@ import { logError } from "./safeLog";
 // (in the same transaction as the reservation), so a failure here only delays an email,
 // it never loses one: the scheduled check, or the next visitor, sends what is left.
 
-// Google Sheets is a secondary reporting copy, never the source of truth, and it is not retried.
+// Google Sheets is an optional reporting copy, never the source of truth, and it is not retried.
+// OFF unless CAMP_SHEETS_COPY=true (see isCampSheetsCopyEnabled).
 async function copyToSheets(registrationId: string): Promise<void> {
-  if (!isGoogleSheetsConfigured()) return;
+  if (!isCampSheetsCopyEnabled()) return;
   const registration = await getRegistrationSnapshot(registrationId);
   if (!registration) return;
   for (const child of registration.children) {

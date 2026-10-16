@@ -1,4 +1,4 @@
-import { Pool } from "pg";
+import { Pool, types } from "pg";
 
 // Server-only. Connection to the authoritative camp-registration database.
 // In production this must be a Neon/Vercel Postgres *pooled* connection
@@ -7,6 +7,11 @@ import { Pool } from "pg";
 // would otherwise open its own real TCP connection. We also cap each
 // instance's own pool to a single connection so the fan-out is handled
 // upstream by the pooler, not by us.
+
+// A DATE column (a birth date, the first day of a camp week) is a calendar date, not a moment.
+// The driver would turn it into a JavaScript Date in the server's time zone, which prints as
+// "Wed Mar 09 2016 00:00:00 GMT-0500 (Eastern Standard Time)"; keep the plain "2016-03-09".
+types.setTypeParser(types.builtins.DATE, (value: string) => value);
 
 let pool: Pool | null = null;
 

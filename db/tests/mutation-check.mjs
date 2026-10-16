@@ -9,7 +9,7 @@
 // Run it with:  DATABASE_URL=postgres://user:pass@localhost:5432/anydb npm run test:mutations
 // (slow: about 20-60 seconds per mutation; it is not part of `npm test`).
 
-import { cpSync, existsSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
@@ -35,15 +35,33 @@ const SUITES = {
   pool1: "db/tests/pool-of-one.test.mjs",
   smtp: "db/tests/smtp-stack.test.mjs",
   logsafety: "db/tests/log-safety.test.mjs",
+  season: "db/tests/season.test.mjs",
+  i18n: "db/tests/i18n.test.mjs",
+  privacy: "db/tests/privacy.test.mjs",
+  roster: "db/tests/roster-export.test.mjs",
+  rosterhttp: "db/tests/roster-http.test.mjs",
+  manual: "db/tests/manual-confirm.test.mjs",
+  manualhttp: "db/tests/manual-confirm-http.test.mjs",
+  waitlist: "db/tests/waitlist.test.mjs",
+  waitlisthttp: "db/tests/waitlist-http.test.mjs",
 };
+// Suites that start the real production server need the site built inside the scratch copy.
+const SERVER_SUITES = new Set(["rosterhttp", "manualhttp", "waitlisthttp"]);
 
 const MIGRATION_004 = "db/migrations/004_payment_policy.sql";
+const MIGRATION_007 = "db/migrations/007_consent_and_erasure.sql";
 const CAMPDB = "src/lib/campDb.ts";
+const PRIVACYDATA = "src/lib/privacyData.ts";
+const WINDOW = "src/lib/registrationWindow.ts";
+const EMAILS = "src/lib/campEmailTemplates.ts";
+const ROSTER_EXPORT = "src/lib/rosterExport.ts";
+const WAITLIST = "src/lib/waitlist.ts";
+const ROSTER_ROUTE = "src/app/api/admin/camp-rosters/download/route.ts";
 const SERVICE = "src/lib/registrationService.ts";
 const OUTBOX = "src/lib/outbox.ts";
 const SCHEDULED = "src/lib/scheduledCheck.ts";
 
-const db = (what, sql, suites, masked) => ({ layer: "database", what, sql, suites, masked });
+const db = (what, sql, suites, masked, sqlFile) => ({ layer: "database", what, sql, suites, masked, sqlFile });
 const code = (what, patches, suites) => ({ layer: "code", what, patches, suites });
 
 const MUTATIONS = [
@@ -143,7 +161,7 @@ const MUTATIONS = [
   code("the printed roster stops at 30 rows (children 31-33 would be missing)", [{ file: "src/lib/campRoster.ts", find: "const rowCount = Math.max(MAX_CAMPERS, weekRoster.capacity, weekRoster.rows.length);", replace: "const rowCount = MAX_CAMPERS;" }], ["xlsx"]),
 
   // --- the production-readiness review: registration path, outbox, scheduler ---
-  code("form mistakes use up the family's hourly allowance (validation after the rate limit)", [{ file: SERVICE, find: "const parsed = validateRegistrationBody(body as Record<string, unknown>, hooks.now);", replace: "await rateLimit(\"register-ip\", clientIp(request), REGISTRATION_LIMITS.newPerIpPerHour, 3600);\n  const parsed = validateRegistrationBody(body as Record<string, unknown>, hooks.now);" }], ["flow"]),
+  code("form mistakes use up the family's hourly allowance (validation after the rate limit)", [{ file: SERVICE, find: "const parsed = validateRegistrationBody(body as Record<string, unknown>, hooks.now, lang);", replace: "await rateLimit(\"register-ip\", clientIp(request), REGISTRATION_LIMITS.newPerIpPerHour, 3600);\n  const parsed = validateRegistrationBody(body as Record<string, unknown>, hooks.now, lang);" }], ["flow"]),
   code("an attempt that creates nothing keeps its allowance (a family trying for a full week locks itself out)", [{ file: SERVICE, find: "await Promise.allSettled(taken.map((hit) => rateLimitRefund(hit)));", replace: "void taken;" }], ["flow"]),
   code("a second reservation for the same child and week is allowed", [{ file: CAMPDB, find: "if (overlap.size > 0) {", replace: "if (false as boolean) {" }], ["flow", "families"]),
   code("a submission key is honoured for any email (another family's link could be returned)", [{ file: CAMPDB, find: `if (emailKey(row.email as string) !== emailKey(email)) return { ok: false, reason: "idempotency_conflict" };`, replace: "" }], ["policy", "flow"]),
@@ -179,6 +197,51 @@ const MUTATIONS = [
   code("any number of emails can be in flight at once (no cluster-wide cap)", [{ file: OUTBOX, find: "if ((active.rows[0].n as number) >= cap) {", replace: "if (false as boolean) {" }], ["outbox"]),
   code("phone numbers are not checked (a family with no usable number to call)", [{ file: SERVICE, find: "if (badPhone(primaryPhone, true) || badPhone(emergencyPhone, true) || badPhone(secondaryPhone, false)) {", replace: "if (false as boolean) {" }], ["flow"]),
   code("an error log includes the database row", [{ file: "src/lib/safeLog.ts", find: "redact(err.message).slice(0, 300),", replace: "redact(err.message + ' ' + String((err as { detail?: string }).detail)).slice(0, 300)," }], ["logsafety"]),
+  // --- privacy, season and language protections (added with the launch-preparation work) ---
+  db("'a registration needs both consents recorded with the notice version' (CHECK)", "ALTER TABLE registrations DROP CONSTRAINT registrations_consents_recorded;", ["privacy"], undefined, MIGRATION_007),
+  code("a registration is accepted without the health-information consent", [{ file: SERVICE, find: "if (body.codeOfConductAccepted !== true || body.consentAccepted !== true || body.healthConsentAccepted !== true) {", replace: "if (body.codeOfConductAccepted !== true || body.consentAccepted !== true) {" }], ["privacy"]),
+  code("erasing a family leaves the child's health information", [{ file: PRIVACYDATA, find: "date_of_birth = NULL, age = '', health_info = ''", replace: "date_of_birth = NULL, age = ''" }], ["privacy"]),
+  code("erasing a family leaves the emergency contact", [{ file: PRIVACYDATA, find: "emergency_name = '', emergency_relationship = '', emergency_phone = '',", replace: "emergency_relationship = '', emergency_phone = '',"}], ["privacy"]),
+  code("erasing a family leaves the owner's private notes", [{ file: PRIVACYDATA, find: "  await client.query(`DELETE FROM admin_notes WHERE registration_id = $1`, [registrationId]);\n", replace: "" }], ["privacy"]),
+  code("erasing a family leaves emails queued for it", [{ file: PRIVACYDATA, find: "  await client.query(`DELETE FROM email_outbox WHERE registration_id = $1`, [registrationId]);\n", replace: "" }], ["privacy"]),
+  code("the season clean-up erases families whose payment is still unresolved", [{ file: PRIVACYDATA, find: '(item.status === "pending_payment" || item.status === "payment_reported" ? plan.blocked : plan.due).push(item);', replace: "plan.due.push(item);" }], ["privacy"]),
+  code("the season clean-up does not wait the retention period", [{ file: PRIVACYDATA, find: "HAVING max(w.end_date) + $1::int <= $2::date", replace: "HAVING max(w.end_date) + $1::int <= $2::date + 400" }], ["privacy"]),
+  code("registration opens although the owner has not approved the dates", [{ file: WINDOW, find: "return calendar.confirmed || isSeasonPreview(env);", replace: "return true;" }], ["season"]),
+  code("a mistyped opening time opens the doors", [{ file: WINDOW, find: 'if (!opens.ok) return { state: "not_announced" };', replace: "" }], ["season"]),
+  code("registration opens before the opening time", [{ file: WINDOW, find: 'if (opens.iso && now.getTime() < Date.parse(opens.iso)) return { state: "opens_later", opensAt: opens.iso };', replace: "" }], ["season"]),
+  code("the registration endpoint ignores whether registration is open", [{ file: SERVICE, find: 'if (opening.state !== "open") {', replace: "if (false as boolean) {" }], ["season"]),
+  code("the cancellation notice is always written in English", [{ file: EMAILS, find: "const e = getMessages(lang).email.cancellation;", replace: 'const e = getMessages("en").email.cancellation;' }], ["i18n"]),
+  // --- roster downloads and the Google Sheets switch ---
+  code("a CSV cell that starts with = + - @ is not neutralised (formula injection)", [{ file: ROSTER_EXPORT, find: "if (/^[=+\\-@\\t\\r]/.test(text)) text = `'${text}`;", replace: "" }], ["roster"]),
+  code("the sign-in sheet includes the health notes", [{ file: ROSTER_EXPORT, find: '{ header: "Medical note on file", value: (r) => r.medicalNoteOnFile }', replace: '{ header: "Medical note on file", value: (r) => r.healthInfo }' }], ["roster"]),
+  code("a roster download does not need a recent password", [{ file: ROSTER_ROUTE, find: "const guard = await requireAdmin(request, { fresh: true });", replace: "const guard = await requireAdmin(request);" }], ["rosterhttp"]),
+  code("a CSV download is not recorded in the audit log", [{ file: ROSTER_ROUTE, find: 'await recordAudit("roster_download", week, { format, profile, weeks: result.weekCount, rows: result.rowCount }, "roster");', replace: "" }], ["rosterhttp"]),
+  code("the Google Sheets copy is on whenever Google is set up (no separate switch)", [{ file: "src/lib/googleSheets.ts", find: 'return process.env.CAMP_SHEETS_COPY === "true" && isGoogleSheetsConfigured();', replace: "return isGoogleSheetsConfigured();" }], ["roster"]),
+  {
+    layer: "code",
+    what: "the roster query lists released places too",
+    patches: [{ file: CAMPDB, find: "WHERE rs.week_id = $1 AND rs.status = 'active'\n     ORDER BY c.full_name", replace: "WHERE rs.week_id = $1\n     ORDER BY c.full_name" }],
+    suites: ["roster", "xlsx"],
+    masked: "the roster also drops every cancelled registration by its status, so a released family never shows; the two layers must both fail for a family to leak",
+  },
+  code("asking for one week gives every week", [{ file: "src/lib/campRoster.ts", find: "if (onlyWeekId && week.id !== onlyWeekId) continue;", replace: "" }], ["roster"]),
+  // --- confirming a payment the parent never reported: finding the family from what the bank shows ---
+  code("the dashboard search no longer finds a registration by the amount of a deposit", [{ file: CAMPDB, find: "        OR ($3::int IS NOT NULL AND r.amount_due_cents = $3 AND r.status IN ('pending_payment', 'payment_reported', 'cancelled'))\n", replace: "" }], ["manual"]),
+  code("an amount search also lists registrations that are already paid", [{ file: CAMPDB, find: "r.amount_due_cents = $3 AND r.status IN ('pending_payment', 'payment_reported', 'cancelled'))", replace: "r.amount_due_cents = $3)" }], ["manual"]),
+  code("the dashboard search no longer finds a registration by phone number", [{ file: CAMPDB, find: "OR ($4::text IS NOT NULL AND (regexp_replace(r.primary_phone, '\\\\D', '', 'g') LIKE '%' || $4 || '%'", replace: "OR ($4::text IS NULL AND (regexp_replace(r.primary_phone, '\\\\D', '', 'g') LIKE '%' || $4 || '%'" }], ["manual"]),
+  // --- the waiting list: it must never promise or assign a place ---
+  code("the waiting list accepts a week that still has room", [{ file: WAITLIST, find: 'if (withRoom.length > 0) return { ok: false, reason: "week_has_room", weekIds: withRoom };', replace: "" }], ["waitlist"]),
+  code("the owner can email a waiting family while the week is full", [{ file: WAITLIST, find: 'if ((e.taken_count as number) >= (e.max_capacity as number)) return { ok: false, reason: "week_full" };', replace: "" }], ["waitlist"]),
+  code("a family that already holds a place is emailed as if it were waiting", [{ file: WAITLIST, find: 'if (registered.rows.length > 0) return { ok: false, reason: "already_registered" };', replace: "" }], ["waitlist"]),
+  code("a family can be emailed over and over (no limit of three)", [{ file: WAITLIST, find: 'if ((e.notified_count as number) >= WAITLIST_LIMITS.maxNotifications) return { ok: false, reason: "too_many" };', replace: "" }], ["waitlist"]),
+  code("a family can be emailed twice within minutes (no cool-down)", [{ file: WAITLIST, find: "if (e.notified_at && now.getTime() - new Date(e.notified_at as string).getTime() < WAITLIST_LIMITS.renotifyAfterHours * 3600_000) {", replace: "if (false as boolean) {" }], ["waitlist"]),
+  code("taking a family off the list does not delete it", [{ file: WAITLIST, find: "`DELETE FROM waitlist_entries WHERE id = $1`", replace: "`UPDATE waitlist_entries SET status = status WHERE id = $1`" }], ["waitlist"]),
+  code("finished waiting-list requests are kept after their week", [{ file: WAITLIST, find: "WHERE w.id = e.week_id AND w.end_date < $1::date`", replace: "WHERE w.id = e.week_id AND w.end_date < $1::date - 100000`" }], ["waitlist"]),
+  code("erasing a family leaves their waiting-list request", [{ file: PRIVACYDATA, find: "  await client.query(`DELETE FROM waitlist_entries WHERE email_key = lower(btrim($1))`, [locked.rows[0].email]);\n", replace: "" }], ["waitlist"]),
+  code("the French 'a place may be open' email says a place is reserved", [{ file: "src/lib/i18n/fr.ts", find: '"Aucune place ne vous est réservée, et nous ne pouvons pas promettre qu’il en reste une', replace: '"Une place vous est réservée, et nous ne pouvons pas promettre qu’il en reste une' }], ["waitlist"]),
+  code("the owner's waiting-list notice route does not need a login", [{ file: "src/app/api/admin/waitlist/[id]/notify/route.ts", find: "  if (!guard.ok) return guard.response;\n", replace: "" }], ["waitlisthttp"]),
+  code("the waiting list is on although the owner has not switched it on", [{ file: WAITLIST, find: 'return env.WAITLIST_ENABLED === "true";', replace: "return true;" }], ["waitlist"]),
+  code("a week the owner merely closed (it still has room) is offered the waiting list", [{ file: "src/app/api/camp-capacity/route.ts", find: "waitlistable: waitlistOn && remaining === 0,", replace: "waitlistable: waitlistOn && (remaining === 0 || !week.isOpen)," }], ["waitlisthttp"]),
 ];
 
 function applyPatch(workDir, { file, find, replace }) {
@@ -194,10 +257,17 @@ function prepare(m) {
   cpSync("src", join(work, "src"), { recursive: true });
   cpSync("db", join(work, "db"), { recursive: true });
   cpSync("scripts", join(work, "scripts"), { recursive: true });
-  for (const f of ["package.json", "tsconfig.json", "next.config.ts", "next-env.d.ts"]) if (existsSync(f)) cpSync(f, join(work, f));
-  symlinkSync(resolve("node_modules"), join(work, "node_modules"));
+  cpSync("docs", join(work, "docs"), { recursive: true }); // the season and legal-review tests compare generated documents
+  for (const f of ["package.json", "tsconfig.json", "next.config.ts", "next-env.d.ts", "postcss.config.mjs", "public", "assets"]) if (existsSync(f)) cpSync(f, join(work, f), { recursive: true }); // enough to build the site, for the suites that talk to the real server
+  if ((m.suites ?? []).some((s) => SERVER_SUITES.has(s))) {
+    // The site builder refuses a symlinked node_modules that points outside the project; hard links cost no space or time.
+    const linked = spawnSync("cp", ["-al", realpathSync("node_modules"), join(work, "node_modules")], { encoding: "utf8" });
+    if (linked.status !== 0) symlinkSync(resolve("node_modules"), join(work, "node_modules"));
+  } else {
+    symlinkSync(resolve("node_modules"), join(work, "node_modules"));
+  }
   if (m.sql) {
-    const path = join(work, MIGRATION_004);
+    const path = join(work, m.sqlFile ?? MIGRATION_004);
     writeFileSync(path, `${readFileSync(path, "utf8")}\n-- MUTATION: ${m.what}\n${m.sql}\n`);
   }
   for (const patch of m.patches ?? []) applyPatch(work, patch);

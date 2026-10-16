@@ -38,8 +38,9 @@ console.log("\n=== 2. A repeated submission caught half-way by the database does
   await other.query("BEGIN");
   const row = await other.query(
     `INSERT INTO registrations (idempotency_key, parent_name, email, primary_phone, emergency_name, emergency_relationship,
-       emergency_phone, code_of_conduct_accepted, consent_accepted, status, total_price_cents, amount_due_cents, hold_expires_at)
-     VALUES ($1,'Rival','rival@example.test','514-555-0000','E','A','2',true,true,'pending_payment',38000,43700, now() + interval '12 hours') RETURNING id`,
+       emergency_phone, code_of_conduct_accepted, consent_accepted, health_consent_accepted, consent_version, consent_recorded_at,
+       status, total_price_cents, amount_due_cents, hold_expires_at)
+     VALUES ($1,'Rival','rival@example.test','514-555-0000','E','A','2',true,true,true,'test',now(),'pending_payment',38000,43700, now() + interval '12 hours') RETURNING id`,
     [key]
   );
   const child = await other.query(`INSERT INTO children (registration_id, full_name, date_of_birth, age, health_info) VALUES ($1,'Rival Kid','2017-01-01','9','none') RETURNING id`, [row.rows[0].id]);

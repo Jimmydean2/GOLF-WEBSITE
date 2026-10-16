@@ -68,7 +68,11 @@ ${blocks.join("\n")}
    wording ("I am the parent or legal guardian") enough?
 7. **Retention.** How long camper records, health information and payment records must or may be
    kept (the documents propose a schedule; the lawyer and the accountant decide).
-8. **Distance contracts.** A registration made online is a contract by distance. Does the
+8. **Automated decisions (Law 25).** The site releases an unpaid, unreported reservation by itself after
+   12 hours. The family is told the rule in advance (page and emails) and the owner can reinstate it.
+   Does that count as a decision made only by automated processing that must be disclosed, with a right
+   to ask for a review?
+9. **Distance contracts.** A registration made online is a contract by distance. Does the
    confirmation email (the family's copy) contain everything required: the business's identity,
    address and telephone, a description of the service, the total price and payment terms, and
    the cancellation conditions?

@@ -65,9 +65,14 @@ console.log("=== 1. The source has exactly two ways to release, and only one is 
   check("the automatic release selects, and then re-checks under the row lock, only unreported pending reservations", guards === 2, `${guards} guarded queries`);
   check("it contains no mention of the reported status", !/payment_reported'/.test(auto.replace(/payment_reported_at/g, "")));
 
-  const callers = files.filter((p) => /\bcancelRegistration\b/.test(text.get(p)) && p !== "src/lib/campDb.ts");
+  // Erasing a family (an administrator's decision) releases the places it held, through the same
+  // function; so privacyData.ts is the one library caller allowed, and it must itself be reachable
+  // only from the administrator's routes.
+  const callers = files.filter((p) => /\bcancelRegistration\b/.test(text.get(p)) && p !== "src/lib/campDb.ts" && p !== "src/lib/privacyData.ts");
   check("cancelRegistration (the administrator's release) is only reachable from admin routes", callers.length > 0 && callers.every((p) => p.startsWith("src/app/api/admin/")), callers.join(", "));
-  const autonomous = ["src/lib/scheduledCheck.ts", "src/lib/outbox.ts", "src/lib/outboxQueue.ts", "src/lib/alerts.ts", "src/lib/registrationService.ts", "src/lib/registrationEffects.ts", "src/app/api/cron/payment-review/route.ts", "src/app/api/camp-capacity/route.ts", "src/app/camp-registration/[token]/page.tsx", "src/app/api/camp-registration/report/route.ts"];
+  const erasers = files.filter((p) => /from\s+["'](@\/lib\/|\.{1,2}\/(?:lib\/)?)privacyData["']/.test(text.get(p)));
+  check("the erase / retention code (which can release places) is only reachable from admin routes", erasers.length > 0 && erasers.every((p) => p.startsWith("src/app/api/admin/")), erasers.join(", "));
+  const autonomous = ["src/lib/scheduledCheck.ts", "src/lib/outbox.ts", "src/lib/outboxQueue.ts", "src/lib/alerts.ts", "src/lib/registrationService.ts", "src/lib/registrationEffects.ts", "src/app/api/cron/payment-review/route.ts", "src/app/api/camp-capacity/route.ts", "src/app/(en)/camp-registration/[token]/page.tsx", "src/app/(fr)/fr/inscription-camp/[token]/page.tsx", "src/app/api/camp-registration/report/route.ts"];
   const touching = autonomous.filter((p) => /\b(cancelRegistration|confirmRegistrationPayment|reinstateRegistration|grantReviewExtension|authorizeWeekCapacity)\b|status\s*=\s*'(cancelled|paid|refunded)'|DELETE FROM registrations/.test(text.get(p)));
   check("nothing that runs on its own (scheduler, outbox, alerts, cron, traffic, parent pages) can release, confirm, extend or delete", touching.length === 0, touching.join(", "));
   check("nothing in the application ever deletes a registration", files.every((p) => !/DELETE\s+FROM\s+registrations/i.test(text.get(p))));

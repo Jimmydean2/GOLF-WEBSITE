@@ -109,7 +109,7 @@ console.log("\n=== 3. The rehearsal database scripts: $1 weeks, fast clocks, and
   const fresh = await fetch(`${app.url}/api/camp-registration`, {
     method: "POST",
     headers: { "content-type": "application/json", "x-forwarded-for": "203.0.113.200" },
-    body: JSON.stringify({ idempotencyKey: "rehearsal-dollar-week-0001", parentName: "TEST Parent Dollar", email: "owner+dollar@example.test", primaryPhone: "514-555-0150", secondaryPhone: "", emergencyName: "TEST", emergencyRelationship: "TEST", emergencyPhone: "514-555-0199", weeks: ["2027-08-23"], children: [{ fullName: "TEST Child Dollar", dateOfBirth: "2016-06-15", age: "10", healthInfo: "TEST ONLY" }], codeOfConductAccepted: true, consentAccepted: true }),
+    body: JSON.stringify({ idempotencyKey: "rehearsal-dollar-week-0001", parentName: "TEST Parent Dollar", email: "owner+dollar@example.test", primaryPhone: "514-555-0150", secondaryPhone: "", emergencyName: "TEST", emergencyRelationship: "TEST", emergencyPhone: "514-555-0199", weeks: ["2027-08-23"], children: [{ fullName: "TEST Child Dollar", dateOfBirth: "2016-06-15", age: "10", healthInfo: "TEST ONLY" }], codeOfConductAccepted: true, consentAccepted: true, healthConsentAccepted: true }),
   });
   const freshBody = await fresh.json();
   check("a registration now asks for $1.15 (a dollar plus GST and QST)", fresh.status === 200 && freshBody.amountDueCents === 115, JSON.stringify(freshBody).slice(0, 120));
@@ -135,7 +135,7 @@ console.log("\n=== 3. The rehearsal database scripts: $1 weeks, fast clocks, and
   const real = await fetch(`${app.url}/api/camp-registration`, {
     method: "POST",
     headers: { "content-type": "application/json", "x-forwarded-for": "203.0.113.201" },
-    body: JSON.stringify({ idempotencyKey: "a-real-looking-family-0001", parentName: "Marie Tremblay", email: "marie@example.test", primaryPhone: "514-555-0160", secondaryPhone: "", emergencyName: "Paul", emergencyRelationship: "Father", emergencyPhone: "514-555-0161", weeks: ["2027-06-21"], children: [{ fullName: "Lea Tremblay", dateOfBirth: "2016-06-15", age: "10", healthInfo: "none" }], codeOfConductAccepted: true, consentAccepted: true }),
+    body: JSON.stringify({ idempotencyKey: "a-real-looking-family-0001", parentName: "Marie Tremblay", email: "marie@example.test", primaryPhone: "514-555-0160", secondaryPhone: "", emergencyName: "Paul", emergencyRelationship: "Father", emergencyPhone: "514-555-0161", weeks: ["2027-06-21"], children: [{ fullName: "Lea Tremblay", dateOfBirth: "2016-06-15", age: "10", healthInfo: "none" }], codeOfConductAccepted: true, consentAccepted: true, healthConsentAccepted: true }),
   });
   check("setup of the guard test: a registration that is not a TEST one exists", real.status === 200);
   const priceBefore = (await pool.query(`SELECT max(price_cents) AS p FROM camp_weeks`)).rows[0].p;

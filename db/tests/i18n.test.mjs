@@ -20,7 +20,7 @@ const templates = await import("../../src/lib/campEmailTemplates.ts");
 const { handleRegistrationRequest } = await import("../../src/lib/registrationService.ts");
 const { registrationIdFromToken } = await import("../../src/lib/registrationLink.ts");
 const h = createHarness();
-const { pool, campDb, check, resetAll, input, reserveOk, confirmFor, expireHold } = h;
+const { pool, campDb, check, resetAll, reserveOk, confirmFor, expireHold } = h;
 
 const en = getMessages("en");
 const fr = getMessages("fr");
@@ -72,6 +72,11 @@ console.log("\n=== 2. Every French message is French, typographically correct, a
     "email.confirmation.textClosing": ["514-816-3454"], "email.confirmation.textIntro": ["Léa", false],
     "email.cancellation.subjectCancelled": ["Léa", "GD-ABC123"], "email.cancellation.subjectNotReceived": ["Léa", "GD-ABC123"], "email.cancellation.reference": ["GD-ABC123", "Léa"],
     "email.cancellation.weeksReleased": ["June 21"], "email.cancellation.contact": ["514-816-3454"],
+    "waitlist.done": ["June 21", "a@b.test"], "waitlist.errors.weekHasRoom": [["June 21"]],
+    "email.waitlistAck.subject": ["June 21"], "email.waitlistAck.intro": ["Chantal", "June 21"], "email.waitlistAck.remove": ["514-816-3454"],
+    "email.waitlistNotify.subject": ["June 21"], "email.waitlistNotify.intro": ["Chantal", "June 21"], "email.waitlistNotify.remove": ["514-816-3454"],
+    "consent.panel": [90], "privacy.version": ["2026-10-16"], "privacy.responsible": ["James", "a@b.test", "514-816-3454"],
+    "privacy.keep": [90, 6], "privacy.rightsContact": ["a@b.test", "514-816-3454"],
   };
   const flat = (node, path = "") => {
     if (typeof node === "function") return [[path, node]];
@@ -82,16 +87,19 @@ console.log("\n=== 2. Every French message is French, typographically correct, a
   const unsampled = flat(fr).filter(([k, v]) => typeof v === "function" && !S[k]).map(([k]) => k);
   check("every message that takes values has sample values in this test (so none is skipped)", unsampled.length === 0, unsampled.join(", "));
 
-  const texts = [];
-  for (const [path, v] of flat(fr)) {
-    if (typeof v === "function") texts.push([path, String(v(...S[path]))]);
-    else if (typeof v === "string") texts.push([path, v]);
-  }
-  const enTexts = [];
-  for (const [path, v] of flat(en)) {
-    if (typeof v === "function") enTexts.push([path, String(v(...S[path]))]);
-    else if (typeof v === "string") enTexts.push([path, v]);
-  }
+  const collect = (dictionary) => {
+    const out = [];
+    for (const [path, v] of flat(dictionary)) {
+      if (typeof v === "function") {
+        const result = v(...S[path]);
+        if (Array.isArray(result)) result.forEach((t, i) => out.push([`${path}[${i}]`, String(t)]));
+        else out.push([path, String(result)]);
+      } else if (typeof v === "string") out.push([path, v]);
+    }
+    return out;
+  };
+  const texts = collect(fr);
+  const enTexts = collect(en);
   const strip = (t) => t.replace(/[]/g, "");
   check("no message is empty in either language", texts.every(([, t]) => strip(t).trim().length > 0) && enTexts.every(([, t]) => strip(t).trim().length > 0));
 
@@ -150,6 +158,7 @@ console.log("\n=== 4. The registration form's POST answers in the family's langu
     emergencyPhone: "514-555-0199",
     codeOfConductAccepted: true,
     consentAccepted: true,
+    healthConsentAccepted: true,
     children: [{ fullName: `Émilie Côté ${n}`, dateOfBirth: "2017-04-04", age: "10", healthInfo: "Aucun" }],
     weeks: [firstWeek],
     ...extra,

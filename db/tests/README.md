@@ -11,9 +11,9 @@ is the only clean way to test.
 # A local Postgres must be running; the URL only needs to reach the server (any database name).
 export DATABASE_URL=postgres://user:pass@localhost:5432/anydb
 
-npm test                       # every suite below, about six minutes (the first run builds the site)
+npm test                       # every suite below, about fifteen minutes (the first run builds the site)
 npm run test:payment-policy    # or one suite at a time
-npm run test:mutations         # slow (about 15 minutes), not part of `npm test`
+npm run test:mutations         # slow (about 45 minutes for all of them; name a few to run only those), not part of `npm test`
 ```
 
 Safety guards: the helper refuses any database host that is not `localhost` / `127.0.0.1`, and it
@@ -21,7 +21,7 @@ removes the Gmail and Google credentials from the environment, so a test can nev
 or touch a real calendar or sheet. Tests that exercise the email code use a fake mailer, or the local
 recording mail server in `scripts/lib/smtpSink.mjs`, which delivers nothing anywhere.
 
-The last suites (`http-privacy`, `opening-day`, `rehearsal-kit`) build and start the real production
+The last suites (`http-privacy`, `roster-http`, `manual-confirm-http`, `waitlist-http`, `launch-http`, `opening-day`, `rehearsal-kit`) build and start the real production
 server (`next start`) against a throwaway database and talk to it over HTTP, with the site running on
 ONE database connection exactly as in production. `SIM_FAMILIES`, `SIM_CONCURRENCY` and `SIM_APP_POOL`
 scale the opening-day simulation, for example `SIM_FAMILIES=300 SIM_CONCURRENCY=100 npm run test:opening-day`.
@@ -47,6 +47,16 @@ scale the opening-day simulation, for example `SIM_FAMILIES=300 SIM_CONCURRENCY=
 | `http-privacy` | Two families with sentinel data against the production server: pages, APIs, errors, headers, forged links, 210 admin requests without a login, emails, third-party scripts, server logs |
 | `opening-day` | 130 to 300 families, a flaky then absent mail server, a restart, and days of moved clocks, end to end, with a full accounting at the end |
 | `rehearsal-kit` | The launch-rehearsal tools themselves: the fake-registration script, the preflight check, and the guarded rehearsal SQL |
+| `season` | One calendar (`src/lib/season.ts`) drives the week labels, dates, database seed, registration gate and checks; the arithmetic of the 2027 calendar; no stale year anywhere; the preflight reports the season honestly |
+| `i18n` | English and French have exactly the same messages and placeholders; French is French, typographically correct; money, dates and week names in both; every email in the family's language; the cancellation notice; the generated lawyer-review document is current |
+| `privacy` | Consent is required, split in two and recorded (also by the database); a family's copy of its data; erasing leaves nothing personal in any table; the season clean-up (right families, right day, never an unresolved payment); the audit log holds no personal details |
+| `launch-http` | The camp pages, privacy notice and language switch in both languages; a French family from form to email; the owner's privacy tools behind login and recent password; the cancellation notice |
+| `roster-export` | CSV is well-formed (BOM, quoting, accents), nothing a parent typed can run as a formula, exactly the held places (row count reconciles with the database), the sign-in sheet leaks no health/emergency/email/reference, Excel one-week and sign-in versions, the Google Sheets copy is off by default |
+| `roster-http` | The download route over HTTP: login, recent password, same-site, never cached, CONFIDENTIAL file name, recorded without personal details, the old plain link is gone |
+| `manual-confirm` | A payment the parent never reported can be found (reference any way, name, email, phone, amount) and confirmed, released or held; when the week has filled up it is refused and no other family changes; two confirmations racing for the last place; wrong amount/reference/dates refused |
+| `manual-confirm-http` | The same over HTTP: search by amount and phone, recent password, plain-language refusal, the confirmation email |
+| `waitlist` | The waiting list cannot hold or assign a place (structure, source scan, behaviour); only full weeks; the owner can email "a place may be open" only while the week has room, never more than 3 times, never to a family already registered; two families told about one place; emails queued, retried, once only; privacy (copy, erase, deletion after the week); off unless switched on |
+| `waitlist-http` | The waiting list over HTTP in both languages: joining, the acknowledgement, the owner's three routes behind login, off by default |
 | `mutation-check` | Switches off one protection at a time on a scratch copy (a database rule, or one line of the application) and requires a test to fail. A protection that nothing checks would show up here |
 
 Time-based behaviour is tested without waiting: deadlines are moved *earlier* in the database (the

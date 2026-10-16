@@ -52,6 +52,7 @@ export function createHarness() {
       emergencyPhone: "514-555-1111",
       codeOfConductAccepted: true,
       consentAccepted: true,
+      healthConsentAccepted: true,
       children: [{ fullName: `Test Child ${label}`, dateOfBirth: "2018-01-01", age: "8", healthInfo: "none" }],
       weekIds: ["2027-07-05"],
       ...overrides,
@@ -172,8 +173,8 @@ export function createHarness() {
     return {
       text: `INSERT INTO registrations (idempotency_key, parent_name, email, primary_phone, emergency_name,
                emergency_relationship, emergency_phone, code_of_conduct_accepted, consent_accepted,
-               status, total_price_cents)
-             VALUES ($1,'Raw Parent','raw@example.test','1','E','A','2',true,true,$2,38000) RETURNING id`,
+               health_consent_accepted, consent_version, consent_recorded_at, status, total_price_cents)
+             VALUES ($1,'Raw Parent','raw@example.test','1','E','A','2',true,true,true,'test',now(),$2,38000) RETURNING id`,
       values: [`raw-${label}-${Date.now()}-${Math.random()}`, status],
     };
   }

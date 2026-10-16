@@ -5,6 +5,7 @@ import { maybeRunFromTraffic } from "@/lib/scheduledCheck";
 import { siteOrigin } from "@/lib/siteUrl";
 import { logError } from "@/lib/safeLog";
 import { registrationWindow } from "@/lib/registrationWindow";
+import { isWaitlistEnabled } from "@/lib/waitlist";
 
 // Capacity now comes from Postgres (the authoritative store — see
 // src/lib/campDb.ts), not Google Sheets. Price-per-week and open/closed
@@ -32,8 +33,9 @@ export async function GET(request: Request) {
 
     const weeks: Record<
       string,
-      { taken: number; max: number; remaining: number; full: boolean; priceCents: number; isOpen: boolean }
+      { taken: number; max: number; remaining: number; full: boolean; priceCents: number; isOpen: boolean; waitlistable: boolean }
     > = {};
+    const waitlistOn = isWaitlistEnabled();
     for (const week of campWeeks) {
       const remaining = Math.max(week.maxCapacity - week.takenCount, 0);
       weeks[week.id] = {
@@ -43,6 +45,9 @@ export async function GET(request: Request) {
         full: remaining === 0 || !week.isOpen,
         priceCents: week.priceCents,
         isOpen: week.isOpen,
+        // A family may ask to wait only for a week that is really full (not one merely closed), and only
+        // if the owner has switched the waiting list on.
+        waitlistable: waitlistOn && remaining === 0,
       };
     }
 

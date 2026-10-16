@@ -7,6 +7,7 @@ import { enqueueEmail } from "./outboxQueue";
 import { inCalendarOrder } from "./weeks";
 import { logError } from "./safeLog";
 import { parseLang, type Lang } from "./lang";
+import { PRIVACY_NOTICE_VERSION } from "./privacy";
 
 // Server-only. The authoritative store for camp-week capacity and registrations.
 //
@@ -79,6 +80,17 @@ async function lockWeeks(client: PoolClient, weekIds: string[]): Promise<Map<str
 }
 
 type Actor = "owner" | "system" | "parent";
+
+// For the few actions that are not a registration change but should still leave a trace in the
+// audit log (a download of personal data, for example). Never put personal details in `details`.
+export async function recordAudit(
+  action: string,
+  targetId: string,
+  details: Record<string, unknown> = {},
+  targetType = "registration"
+): Promise<void> {
+  await writeAudit(getPool(), action, targetId, details, "owner", targetType);
+}
 
 async function writeAudit(
   client: Queryable,
@@ -204,7 +216,9 @@ export type ReserveRegistrationInput = {
   emergencyRelationship: string;
   emergencyPhone: string;
   codeOfConductAccepted: boolean;
-  consentAccepted: boolean;
+  consentAccepted: boolean; // agreed to the privacy notice
+  healthConsentAccepted: boolean; // separately agreed to the collection of the child's health information
+  consentVersion?: string; // which version of the notice that was (defaults to the current one)
   // The language the family used on the form; every email to them is written in it.
   language?: Lang;
   children: ReserveChildInput[];
@@ -404,8 +418,9 @@ async function reserveOnce(input: ReserveRegistrationInput): Promise<ReserveResu
          (idempotency_key, parent_name, email, primary_phone, secondary_phone,
           emergency_name, emergency_relationship, emergency_phone,
           code_of_conduct_accepted, consent_accepted, total_price_cents,
-          reference_code, amount_due_cents, hold_expires_at, language)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13, now() + make_interval(mins => $14), $15)
+          reference_code, amount_due_cents, hold_expires_at, language,
+          health_consent_accepted, consent_version, consent_recorded_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13, now() + make_interval(mins => $14), $15, $16, $17, now())
        RETURNING id, hold_expires_at`,
       [
         input.idempotencyKey,
@@ -423,6 +438,8 @@ async function reserveOnce(input: ReserveRegistrationInput): Promise<ReserveResu
         amountDueCents,
         holdMinutes,
         parseLang(input.language),
+        input.healthConsentAccepted,
+        input.consentVersion ?? PRIVACY_NOTICE_VERSION,
       ]
     );
     const registrationId = regResult.rows[0].id as string;
@@ -491,6 +508,9 @@ export type RegistrationDetail = {
   emergencyRelationship: string;
   emergencyPhone: string;
   language: Lang; // the language the family registered in; their emails and page follow it
+  consentVersion: string | null; // which version of the privacy notice they agreed to
+  consentRecordedAt: string | null;
+  anonymizedAt: string | null; // set once their personal details have been erased
   status: string;
   totalPriceCents: number; // before tax
   amountDueCents: number; // tax included
@@ -538,6 +558,9 @@ async function loadRegistration(client: Queryable, id: string): Promise<Registra
     emergencyRelationship: row.emergency_relationship,
     emergencyPhone: row.emergency_phone,
     language: parseLang(row.language),
+    consentVersion: (row.consent_version as string | null) ?? null,
+    consentRecordedAt: isoOrNull(row.consent_recorded_at),
+    anonymizedAt: isoOrNull(row.anonymized_at),
     status: row.status,
     totalPriceCents: row.total_price_cents,
     amountDueCents: row.amount_due_cents,
@@ -556,7 +579,7 @@ async function loadRegistration(client: Queryable, id: string): Promise<Registra
     children: childRes.rows.map((c) => ({
       id: c.id,
       fullName: c.full_name,
-      dateOfBirth: String(c.date_of_birth),
+      dateOfBirth: c.date_of_birth ? String(c.date_of_birth) : "",
       age: c.age,
       healthInfo: c.health_info,
     })),
@@ -879,7 +902,7 @@ export async function confirmRegistrationPayment(
           depositAt: input.depositAt.toISOString(),
           paidOnTime,
           bankConfirmationNumber: bankNumber,
-          note: note || undefined,
+          hasNote: Boolean(note), // the note itself is on the registration, where erasing can reach it
         }
       );
 
@@ -934,9 +957,12 @@ export async function grantReviewExtension(
     );
     const reviewDueAt = new Date(updated.rows[0].review_due_at as string).toISOString();
     const extensionCount = updated.rows[0].extension_count as number;
+    // The note is the owner's own free text: it goes where erasing the family can erase it, not
+    // into the append-only audit log.
+    await client.query(`INSERT INTO admin_notes (registration_id, action, note) VALUES ($1, 'extend_review', $2)`, [registrationId, note]);
     await writeAudit(client, "extend_review", registrationId, {
       hours: input.hours,
-      note,
+      hasNote: true,
       previousReviewDueAt: new Date(rows[0].review_due_at as string).toISOString(),
       reviewDueAt,
       extensionNumber: extensionCount,
@@ -992,7 +1018,7 @@ export async function cancelRegistration(
       });
     }
     await writeAudit(client, "cancel_registration", registrationId, {
-      reason,
+      hasReason: Boolean(reason), // the reason itself is on the registration, where erasing can reach it
       releaseReason,
       previousStatus: row.status,
       releasedWeekIds,
@@ -1282,6 +1308,8 @@ export type RosterRow = {
   emergencyName: string;
   emergencyRelationship: string;
   emergencyPhone: string;
+  email: string;
+  reference: string;
   status: string;
   checkedInAt: string | null;
 };
@@ -1292,7 +1320,8 @@ export async function getWeekRoster(weekId: string): Promise<RosterRow[]> {
     `SELECT rs.id as spot_id, rs.registration_id, rs.checked_in_at,
             c.id as child_id, c.full_name, c.age, c.health_info,
             r.parent_name, r.primary_phone, r.secondary_phone,
-            r.emergency_name, r.emergency_relationship, r.emergency_phone, r.status
+            r.emergency_name, r.emergency_relationship, r.emergency_phone, r.status,
+            r.email, r.reference_code
      FROM registration_spots rs
      JOIN children c ON c.id = rs.child_id
      JOIN registrations r ON r.id = rs.registration_id
@@ -1313,6 +1342,8 @@ export async function getWeekRoster(weekId: string): Promise<RosterRow[]> {
     emergencyName: row.emergency_name,
     emergencyRelationship: row.emergency_relationship,
     emergencyPhone: row.emergency_phone,
+    email: row.email,
+    reference: row.reference_code,
     status: row.status,
     checkedInAt: row.checked_in_at,
   }));
@@ -1326,14 +1357,42 @@ export async function markSpotCheckedIn(spotId: string, checkedIn: boolean): Pro
   ]);
 }
 
+// What the owner may type into the dashboard's search, read from the way people write things:
+//   "GD-7K4M2Q", "gd 7k4m2q", "7K4M2Q"   a reference
+//   "436.91", "$436.91", "436,91 $"       the amount a deposit was for
+//   "(514) 555-0142", "+1 514 555 0142"   a phone number
+// and anything else is looked for in the parent's name, the child's name, the email and the
+// reference. A search for an amount only looks at registrations that still need a payment (an
+// unpaid hold, a payment report or a release): that is what a deposit can belong to.
+export function parseSearchQuery(raw: string): { text: string; reference: string | null; amountCents: number | null; phoneDigits: string | null } {
+  const text = raw.trim();
+  const normalized = normalizeReference(text);
+  const reference = /^GD[A-Z0-9]{6}$/.test(normalized) ? normalized : null;
+  const money = /^\$?\s*(\d{1,5})(?:[.,](\d{1,2}))?\s*\$?$/.exec(text);
+  const amountCents = money ? Math.round(Number(`${money[1]}.${(money[2] ?? "0").padEnd(2, "0")}`) * 100) : null;
+  let phoneDigits: string | null = null;
+  if (/^[\d\s().+-]+$/.test(text)) {
+    let digits = text.replace(/\D/g, "");
+    if (digits.length === 11 && digits.startsWith("1")) digits = digits.slice(1);
+    if (digits.length >= 4) phoneDigits = digits;
+  }
+  return { text, reference, amountCents, phoneDigits };
+}
+
 export async function searchRegistrations(query: string): Promise<RegistrationDetail[]> {
   const pool = getPool();
+  const q = parseSearchQuery(query);
+  if (!q.text) return [];
   const { rows } = await pool.query(
     `SELECT DISTINCT r.id, r.created_at FROM registrations r
      LEFT JOIN children c ON c.registration_id = r.id
      WHERE r.parent_name ILIKE $1 OR c.full_name ILIKE $1 OR r.email ILIKE $1 OR r.reference_code ILIKE $1
+        OR ($2::text IS NOT NULL AND upper(replace(r.reference_code, '-', '')) = $2)
+        OR ($3::int IS NOT NULL AND r.amount_due_cents = $3 AND r.status IN ('pending_payment', 'payment_reported', 'cancelled'))
+        OR ($4::text IS NOT NULL AND (regexp_replace(r.primary_phone, '\\D', '', 'g') LIKE '%' || $4 || '%'
+                                   OR regexp_replace(r.secondary_phone, '\\D', '', 'g') LIKE '%' || $4 || '%'))
      ORDER BY r.created_at DESC LIMIT 50`,
-    [`%${query.replace(/[\\%_]/g, "\\$&")}%`]
+    [`%${q.text.replace(/[\\%_]/g, "\\$&")}%`, q.reference, q.amountCents, q.phoneDigits]
   );
   const results: RegistrationDetail[] = [];
   for (const row of rows) {

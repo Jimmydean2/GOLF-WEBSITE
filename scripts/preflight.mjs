@@ -162,6 +162,23 @@ function checkSeason() {
   }
 }
 
+// --- privacy -----------------------------------------------------------------------------
+// Read from the source text so this works on any Node (the module imports the camp content).
+function checkPrivacy() {
+  if (!existsSync("src/lib/privacy.ts")) return;
+  const text = readFileSync("src/lib/privacy.ts", "utf8");
+  const reviewed = /PRIVACY_NOTICE_REVIEWED\s*=\s*true/.test(text);
+  const days = text.match(/RETENTION_DAYS\s*=\s*(\d+)/)?.[1];
+  const version = text.match(/PRIVACY_NOTICE_VERSION\s*=\s*"([^"]+)"/)?.[1];
+  if (reviewed) pass("Privacy notice", `version ${version}, recorded as reviewed`);
+  else (production ? fail : warn)("Privacy notice", `version ${version} is a DRAFT: no lawyer has reviewed the notice or the consent wording, and the owner has not approved it. See docs/QUEBEC_LEGAL_REVIEW.md. When approved, set PRIVACY_NOTICE_REVIEWED = true in src/lib/privacy.ts${production ? " (this is the real site, so this blocks launch)" : ""}.`);
+  if (days) pass("Retention period", `${days} days after a family's last camp week (a proposal until you confirm it: docs/PRIVACY_AND_LAW25.md, P2)`);
+  if (env("GOOGLE_SHEETS_SHEET_ID") && env("CAMP_SHEETS_COPY") === "true") warn("Google Sheets copy", "CAMP_SHEETS_COPY=true: every camp registration, with children's dates of birth and health notes, is copied to a Google Sheet. That is an extra copy of sensitive data outside the database; the privacy notice does not mention it. Remove the setting unless you have decided you need it.");
+  else if (env("GOOGLE_SHEETS_SHEET_ID")) pass("Google Sheets copy of camp data", "off (camp registrations are not copied to Google; set CAMP_SHEETS_COPY=true only if you decide you want that)");
+  if (env("WAITLIST_ENABLED") === "true") pass("Waiting list", "ON: families see a waiting-list form for a full week. It never holds or assigns a place (docs/ROSTERS_CONFIRMING_AND_WAITLIST.md)");
+  else pass("Waiting list", "off (prepared, not offered): set WAITLIST_ENABLED=true when you decide to offer it");
+}
+
 // --- database ---------------------------------------------------------------------------
 async function checkDatabase() {
   const url = env("DATABASE_URL");
@@ -200,10 +217,10 @@ async function checkDatabase() {
     const version = (await client.query("SHOW server_version")).rows[0].server_version;
     pass("PostgreSQL", version);
     const tables = (await client.query(`SELECT table_name FROM information_schema.tables WHERE table_schema = 'public'`)).rows.map((r) => r.table_name);
-    const needed = ["camp_weeks", "registrations", "children", "registration_spots", "admin_audit_log", "camp_settings", "alert_ledger", "rate_limit_counters", "admin_sessions", "admin_login_attempts", "contact_strikes", "capacity_authorizations", "email_outbox", "job_runs"];
+    const needed = ["camp_weeks", "registrations", "children", "registration_spots", "admin_audit_log", "camp_settings", "alert_ledger", "rate_limit_counters", "admin_sessions", "admin_login_attempts", "contact_strikes", "capacity_authorizations", "email_outbox", "job_runs", "admin_notes", "waitlist_entries"];
     const missing = needed.filter((t) => !tables.includes(t));
-    if (missing.length) fail("Migrations", `Missing tables: ${missing.join(", ")}. Run all of db/migrations (001 to 005) with: npm run db:migrate`);
-    else pass("Migrations", "all expected tables exist (001 to 005)");
+    if (missing.length) fail("Migrations", `Missing tables: ${missing.join(", ")}. Run all of db/migrations (001 to 008) with: npm run db:migrate`);
+    else pass("Migrations", "all expected tables exist");
     if (!missing.length) {
       const weekRows = (await client.query(`SELECT id, label, start_date::text AS start_date, end_date::text AS end_date, max_capacity, price_cents FROM camp_weeks ORDER BY start_date`)).rows;
       const weeks = {
@@ -313,6 +330,7 @@ async function checkLive(url) {
 checkSecrets();
 await loadSeason();
 checkSeason();
+checkPrivacy();
 checkRepo();
 await checkEmail();
 await checkDatabase();

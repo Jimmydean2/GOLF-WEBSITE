@@ -132,9 +132,12 @@ export default function AdminPaymentQueue() {
     // then every 30 seconds.
     const first = setTimeout(load, 0);
     const timer = setInterval(load, 30_000);
+    // An action taken elsewhere on the page (the search panel) changes what this list should show.
+    window.addEventListener("camp-admin-changed", load);
     return () => {
       clearTimeout(first);
       clearInterval(timer);
+      window.removeEventListener("camp-admin-changed", load);
     };
   }, [load]);
 

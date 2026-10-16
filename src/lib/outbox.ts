@@ -12,8 +12,11 @@ import {
   buildParentInstructionsEmail,
   buildParentReleaseNoticeEmail,
   buildParentReminderEmail,
+  buildWaitlistAckEmail,
+  buildWaitlistNotifyEmail,
 } from "./campEmailTemplates";
-import { reservationPath } from "./i18n/routes";
+import { campsPath, reservationPath } from "./i18n/routes";
+import { loadWaitlistEmailContext } from "./waitlist";
 
 // Server-only. The email outbox.
 //
@@ -38,6 +41,9 @@ const POLICY: Record<OutboxKind, { priority: 0 | 1 | 2; giveUpAfterHours: number
   parent_release: { priority: 0, giveUpAfterHours: 72 },
   parent_cancellation: { priority: 0, giveUpAfterHours: 72 },
   parent_reminder: { priority: 1, giveUpAfterHours: 12 },
+  // A waiting-list notice is only useful while a place may still be open, and the acknowledgement is a courtesy.
+  waitlist_notify: { priority: 0, giveUpAfterHours: 24 },
+  waitlist_ack: { priority: 1, giveUpAfterHours: 24 },
   coach_notice: { priority: 2, giveUpAfterHours: 48 },
 };
 
@@ -126,6 +132,8 @@ export type ProcessOptions = {
   origin?: string;
   // Only this registration's emails (used right after a request, to send them at once).
   registrationId?: string;
+  // Or only this waiting-list entry's emails.
+  waitlistEntryId?: string;
   now?: Date;
   send?: Mailer;
   adminEmails?: string[];
@@ -142,18 +150,19 @@ type OutboxRow = {
   dedupe_key: string;
   kind: OutboxKind;
   registration_id: string | null;
+  waitlist_entry_id: string | null;
   attempts: number;
   created_at: string;
 };
 
-const PRIORITY_SQL = `CASE kind WHEN 'parent_instructions' THEN 0 WHEN 'parent_confirmation' THEN 0 WHEN 'parent_release' THEN 0 WHEN 'parent_cancellation' THEN 0 WHEN 'parent_reminder' THEN 1 ELSE 2 END`;
+const PRIORITY_SQL = `CASE kind WHEN 'parent_instructions' THEN 0 WHEN 'parent_confirmation' THEN 0 WHEN 'parent_release' THEN 0 WHEN 'parent_cancellation' THEN 0 WHEN 'waitlist_notify' THEN 0 WHEN 'parent_reminder' THEN 1 WHEN 'waitlist_ack' THEN 1 ELSE 2 END`;
 
 type Claim = { row: OutboxRow | null; full: boolean };
 
 // Takes the next due email, unless the cluster is already sending as many as it may. The count and
 // the claim happen under one short database lock, so a burst of workers starting in the same
 // instant still cannot exceed the limit.
-async function claimNext(now: Date, registrationId: string | undefined, exclude: number[], cap: number): Promise<Claim> {
+async function claimNext(now: Date, scope: { registrationId?: string; waitlistEntryId?: string }, exclude: number[], cap: number): Promise<Claim> {
   const client = await getPool().connect();
   try {
     await client.query("BEGIN");
@@ -174,11 +183,12 @@ async function claimNext(now: Date, registrationId: string | undefined, exclude:
            WHERE ((status = 'pending' AND next_attempt_at <= $1::timestamptz + interval '5 milliseconds')
                OR (status = 'sending' AND lease_until < $1::timestamptz))
              AND ($3::uuid IS NULL OR registration_id = $3::uuid)
+             AND ($5::uuid IS NULL OR waitlist_entry_id = $5::uuid)
              AND id <> ALL($4::bigint[])
            ORDER BY ${PRIORITY_SQL}, next_attempt_at, id
            LIMIT 1 FOR UPDATE SKIP LOCKED)
-        RETURNING id, dedupe_key, kind, registration_id, attempts, created_at`,
-      [now.toISOString(), LEASE_MINUTES, registrationId ?? null, exclude]
+        RETURNING id, dedupe_key, kind, registration_id, waitlist_entry_id, attempts, created_at`,
+      [now.toISOString(), LEASE_MINUTES, scope.registrationId ?? null, exclude, scope.waitlistEntryId ?? null]
     );
     await client.query("COMMIT");
     // (The few milliseconds of tolerance cover the database stamping a row a fraction of a
@@ -262,6 +272,9 @@ function skipReason(kind: OutboxKind, reg: RegistrationDetail, now: Date): strin
       return null;
     case "coach_notice":
       return reg.status === "cancelled" || reg.status === "refunded" ? `released before the notice went out (${reg.status})` : null;
+    case "waitlist_ack":
+    case "waitlist_notify":
+      return null; // handled before a registration is ever loaded: these belong to the waiting list
   }
 }
 
@@ -322,11 +335,12 @@ export async function processOutbox(opts: ProcessOptions = {}): Promise<ProcessS
       summary.stoppedEarly = "the mail server is not accepting messages";
       break;
     }
-    let claim = await claimNext(now, opts.registrationId, exclude, cap);
+    const scope = { registrationId: opts.registrationId, waitlistEntryId: opts.waitlistEntryId };
+    let claim = await claimNext(now, scope, exclude, cap);
     const waitUntil = Math.min(deadline, Date.now() + SLOT_WAIT_MS);
     while (claim.full && Date.now() < waitUntil) {
       await new Promise((r) => setTimeout(r, 150 + Math.random() * 200));
-      claim = await claimNext(now, opts.registrationId, exclude, cap);
+      claim = await claimNext(now, scope, exclude, cap);
     }
     if (claim.full) {
       summary.stoppedEarly = "other servers are already sending the most emails allowed at once; the rest go out in the next run";
@@ -344,9 +358,41 @@ export async function processOutbox(opts: ProcessOptions = {}): Promise<ProcessS
       continue;
     }
 
+    // The waiting list's two emails. They concern a waiting-list entry, not a registration, and say
+    // only that a request was received or that a place MAY be open (nothing is held).
+    if (row.kind === "waitlist_ack" || row.kind === "waitlist_notify") {
+      const ctx = row.waitlist_entry_id ? await loadWaitlistEmailContext(row.waitlist_entry_id, row.kind) : null;
+      if (!ctx) {
+        await finish([row.id], "skipped", now, "no longer on the waiting list");
+        summary.skipped++;
+        continue;
+      }
+      handled++;
+      try {
+        const email =
+          row.kind === "waitlist_ack"
+            ? buildWaitlistAckEmail(ctx)
+            : buildWaitlistNotifyEmail(ctx, { registerUrl: `${origin}${campsPath(ctx.language)}` });
+        await send({ to: ctx.email, ...email });
+        await finish([row.id], "sent", now);
+        sentToday += 1;
+        summary.sent++;
+        countSent(row.kind);
+        consecutiveFailures = 0;
+      } catch (err) {
+        await recordFailure(row, err);
+      }
+      continue;
+    }
+
     const registration = row.registration_id ? await getRegistrationSnapshot(row.registration_id) : null;
     if (!registration) {
       await finish([row.id], "skipped", now, "registration not found");
+      summary.skipped++;
+      continue;
+    }
+    if (registration.anonymizedAt) {
+      await finish([row.id], "skipped", now, "personal details erased");
       summary.skipped++;
       continue;
     }
@@ -476,8 +522,11 @@ export async function getEmailHealth(now: Date = new Date()): Promise<EmailHealt
       WHERE status IN ('pending', 'sending') AND kind <> 'coach_notice'`
   );
   const failed = await pool.query(
-    `SELECT o.kind, o.last_error, o.created_at, r.reference_code, r.parent_name, r.primary_phone
-       FROM email_outbox o JOIN registrations r ON r.id = o.registration_id
+    `SELECT o.kind, o.last_error, o.created_at, r.reference_code,
+            COALESCE(r.parent_name, w.parent_name) AS parent_name, COALESCE(r.primary_phone, w.phone, '') AS primary_phone
+       FROM email_outbox o
+       LEFT JOIN registrations r ON r.id = o.registration_id
+       LEFT JOIN waitlist_entries w ON w.id = o.waitlist_entry_id
       WHERE o.status = 'failed' AND o.created_at > $1::timestamptz - interval '14 days'
       ORDER BY o.created_at DESC LIMIT 20`,
     [now.toISOString()]
@@ -489,7 +538,7 @@ export async function getEmailHealth(now: Date = new Date()): Promise<EmailHealt
     oldestWaitingMinutes: oldest === null ? null : Math.max(Math.floor((now.getTime() - oldest) / MINUTE), 0),
     failed: failed.rows.length,
     failedItems: failed.rows.slice(0, 5).map((r) => ({
-      reference: r.reference_code as string,
+      reference: (r.reference_code as string | null) ?? "waiting list",
       parentName: r.parent_name as string,
       primaryPhone: r.primary_phone as string,
       kind: r.kind as OutboxKind,

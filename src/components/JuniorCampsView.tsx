@@ -3,6 +3,7 @@ import Link from "next/link";
 import { Suspense } from "react";
 import Container from "@/components/Container";
 import CampRegistrationForm from "@/components/CampRegistrationForm";
+import WaitlistForm from "@/components/WaitlistForm";
 import { business, juniorCamps } from "@/lib/content";
 import { campsPath, getMessages, privacyPath } from "@/lib/i18n";
 import { weekLabel } from "@/lib/season";
@@ -110,6 +111,10 @@ export default function JuniorCampsView({ lang }: { lang: Lang }) {
                 <Suspense fallback={null}>
                   <CampRegistrationForm lang={lang} />
                 </Suspense>
+              </div>
+
+              <div className="mt-10">
+                <WaitlistForm lang={lang} />
               </div>
             </Container>
           </section>

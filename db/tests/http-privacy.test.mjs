@@ -53,6 +53,7 @@ function family(tag, weeks) {
     ],
     codeOfConductAccepted: true,
     consentAccepted: true,
+    healthConsentAccepted: true,
   };
 }
 const A = family("Alpha", ["2027-07-05"]);
@@ -218,9 +219,10 @@ console.log("\n=== 6. With the administrator's login, the same data appears (and
   const queue = await fetch(`${app.url}/api/admin/payment-queue`, { headers: { cookie: session.cookie, origin: app.url } });
   const text = await queue.text();
   check("the review queue lists both families (this is the administrator's job)", queue.status === 200 && text.includes(da.reference) && text.includes(db.reference));
-  const download = await fetch(`${app.url}/api/admin/camp-rosters/download?week=2027-07-05`, { headers: { cookie: session.cookie } });
-  check("the roster download works for the administrator", download.status === 200 && /spreadsheet|octet|xlsx/i.test(download.headers.get("content-type") ?? ""), `${download.status} ${download.headers.get("content-type")}`);
-  const anonymousDownload = await fetch(`${app.url}/api/admin/camp-rosters/download?week=2027-07-05`);
+  const ask = (headers) => fetch(`${app.url}/api/admin/camp-rosters/download`, { method: "POST", headers: { "content-type": "application/json", ...headers }, body: JSON.stringify({ format: "xlsx", week: "2027-07-05", profile: "full" }) });
+  const download = await ask({ cookie: session.cookie, origin: app.url });
+  check("the roster download works for the administrator (POST, right after the password)", download.status === 200 && /spreadsheet|octet|xlsx/i.test(download.headers.get("content-type") ?? ""), `${download.status} ${download.headers.get("content-type")}`);
+  const anonymousDownload = await ask({});
   check("and refuses everyone else", anonymousDownload.status === 401);
   await fetch(`${app.url}/api/admin/logout`, { method: "POST", headers: { cookie: session.cookie, origin: app.url } });
   const afterLogout = await fetch(`${app.url}/api/admin/payment-queue`, { headers: { cookie: session.cookie, origin: app.url } });

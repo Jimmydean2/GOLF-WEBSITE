@@ -8,6 +8,9 @@ import { getCampRosterData } from "@/lib/campRoster";
 import { isDatabaseConfigured } from "@/lib/db";
 import { getCampWeeks } from "@/lib/campDb";
 import AdminCampTools from "@/components/AdminCampTools";
+import AdminRetentionPanel from "@/components/AdminRetentionPanel";
+import AdminRosterDownloads from "@/components/AdminRosterDownloads";
+import AdminWaitlist from "@/components/AdminWaitlist";
 import AdminPaymentQueue from "@/components/AdminPaymentQueue";
 import { AdminActionsProvider } from "@/components/AdminActions";
 import AdminWeekEditor from "@/components/AdminWeekEditor";
@@ -31,7 +34,6 @@ export default async function AdminCampRostersPage() {
   const configured = isDatabaseConfigured();
   const weekRosters = configured ? await getCampRosterData() : [];
   const campWeeks = configured ? await getCampWeeks() : [];
-  const totalRegistered = weekRosters.reduce((sum, w) => sum + w.rows.length, 0);
 
   return (
     <div className="py-16 sm:py-24">
@@ -69,21 +71,14 @@ export default async function AdminCampRostersPage() {
             <>
               <AdminPaymentQueue />
 
-              <p className="mt-8 text-ink-soft">
-                {totalRegistered} camper{totalRegistered === 1 ? "" : "s"} registered across all
-                weeks. Download the full workbook below &mdash; one print-ready sheet per week,
-                auto-filled with every registration, always current.
-              </p>
+              <AdminRosterDownloads weeks={weekRosters.map((w) => ({ id: w.id, label: w.label, count: w.rows.length }))} />
 
-              <a
-                href="/api/admin/camp-rosters/download"
-                className="mt-6 inline-flex cursor-pointer items-center justify-center gap-2 rounded-full bg-gradient-to-r from-gold-light via-gold to-gold-deep px-6 py-3 text-sm font-semibold text-ink shadow-md shadow-black/20 transition-all hover:shadow-lg hover:shadow-gold-deep/30"
-              >
-                Download Roster Workbook (.xlsx)
-              </a>
-
+              <AdminWaitlist />
               <AdminWeekEditor weeks={campWeeks} />
               <AdminCampTools />
+              <div className="mt-10">
+                <AdminRetentionPanel />
+              </div>
             </>
           )}
         </AdminActionsProvider>

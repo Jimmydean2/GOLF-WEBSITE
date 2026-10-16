@@ -65,11 +65,12 @@ edit or delete just that occurrence — the rest of the series is unaffected.
 
 ## Step 3: Connect your Google Sheet (sign-ups + full client list)
 
-This is your client "data bank" — every clinic sign-up, lesson booking, and
-camp registration gets logged here as its own row, so **you can open it any
-time** to see everyone's name, phone, and email. It also powers the live
-"X of 10 spots left" counter on the Clinics page and the "X of 30 spots
-left" counter on the Junior Camps page.
+This sheet is the storage for the **Saturday clinic sign-ups** and the **private
+lesson bookings** (and the live "X of 10 spots left" counter on the Clinics
+page). **Junior camp registrations do not need it:** camp registration,
+availability and payments live entirely in the camp database (Step 6), and the
+rosters you download come from that database. By default nothing about a camp
+child is copied to Google (see the optional `CampRegistrations` tab below).
 
 1. Go to [sheets.google.com](https://sheets.google.com) and create a new
    blank spreadsheet, named e.g. "James Dean Golf — Bookings".
@@ -79,7 +80,12 @@ left" counter on the Junior Camps page.
 3. Add a second tab (the `+` at the bottom) named exactly `LessonBookings`.
    In row 1, add these exact column headers:
    `Timestamp | First Name | Last Name | Email | Phone | Lesson Date | Lesson Time | Recurring`
-4. Add a third tab named exactly `CampRegistrations`. In row 1, add these
+4. **Optional, and off unless you switch it on:** a third tab named exactly `CampRegistrations`.
+   Skip this unless you have decided you want an extra copy of every camp registration at Google.
+   It would hold each child's date of birth and health note outside your database, where erasing a family
+   and the end-of-season clean-up cannot reach it, and the privacy notice does not mention it. To use it you must also
+   set `CAMP_SHEETS_COPY=true`; without that setting the site never writes a camp registration to Google, even
+   if the rest of this step is done. If you do add it, in row 1 put these
    exact column headers:
    `Timestamp | Parent Name | Email | Primary Phone | Secondary Phone | Child Name | Date of Birth | Child Age | Health/Medical Info | Emergency Contact Name | Emergency Contact Relationship | Emergency Contact Phone | Weeks | Code of Conduct Accepted | Consent Accepted | Registration ID | Paid | Paid At | Confirm Token`
    (A parent can register one child for several weeks at once — the "Weeks"
@@ -136,12 +142,14 @@ expose your real Gmail password, and you can revoke it anytime).
 ## Step 5: Set an admin password for printable camp rosters (~1 minute)
 
 This gives you a private page, **yoursite.com/admin/camp-rosters**, where
-you can download a print-ready roster workbook any time — one sheet per
-camp week, every registered camper's name, age, parent, phone numbers,
-emergency contact, allergy notes, and paid status already filled in from
-real sign-ups, plus blank rows (at least 30 per week) so you can hand it
-straight to whoever's working that week. It's always current — download
-it again any time and it reflects every registration up to that second.
+you can download the roster any time, as an Excel workbook (one sheet per camp
+week, with blank rows so you can hand it to whoever is working that week) or as
+a plain CSV list, for one week or all of them. Choose **Full roster** (names, ages,
+parent, phone numbers, emergency contact, allergy notes, payment status) or
+**Sign-in sheet** (no health or emergency details: the one to print for a table
+or a helper). It's always current, built straight from the database. Downloads
+ask for your password again (every 15 minutes), the files are named CONFIDENTIAL,
+and every download is recorded in the activity log.
 
 This same page is where you review and confirm camp payments, so please pick
 a **long, unique password** (a few random words is fine) that you use nowhere
@@ -189,8 +197,11 @@ I'll both add it to the hosting environment and run the one-time setup
 (`npm run db:migrate`) that creates the camp registration tables, the 10
 weeks' worth of seed data, the database-level capacity and payment
 safety rules (`003_capacity_integrity.sql` and `004_payment_policy.sql`), and
-the reliable-email queue and scheduled-check log (`005_email_outbox.sql`) —
-nothing further for you to do. (Use a **new, empty** database for the real
+the reliable-email queue and scheduled-check log (`005_email_outbox.sql`), the
+French/English language and cancellation notice (`006`), the consent record and
+erasing tools (`007`) and the optional waiting list (`008`) —
+nothing further for you to do. (Running these on the real database is a launch
+step I will not take until you approve it.) (Use a **new, empty** database for the real
 launch: never the one used for the rehearsal in `docs/LAUNCH_REHEARSAL.md`.)
 
 ---
@@ -253,8 +264,8 @@ Once those are set:
   with that week pre-selected. Parents can select multiple weeks in that
   same form — filling out their info once — and the running total price
   updates live as they add or remove weeks.
-- Every booking, sign-up, or registration appends a row to your sheet — no
-  further setup needed.
+- Every clinic sign-up and lesson booking appends a row to your sheet. A camp
+  registration does **not**, unless you have switched on `CAMP_SHEETS_COPY=true`.
 - Every camp registration sends the parent their Interac instructions and
   private reservation page, and tells you about it. Once the e-transfer is
   showing in your bank account, **Confirm payment** in the **Payment review**
@@ -270,10 +281,11 @@ Once those are set:
   only if the week still has room; if it doesn't, nothing changes and the
   dashboard tells you why.
 - **yoursite.com/admin/camp-rosters** (behind your admin password) lets
-  you download a printable roster workbook any time, one sheet per camp
-  week, auto-filled with every current registration — always up to date,
+  you download the roster any time (Excel or CSV, one week or all, full or
+  sign-in sheet), auto-filled with every current registration — always up to date,
   no manual copying. The same page also lets you search for a family's
-  registration (by name or payment reference) and cancel it, resend either
+  registration (by name, payment reference, email, phone number or the amount
+  of a deposit) and cancel it, resend either
   email, check a camper in, adjust a week's price, open status and capacity
   (up to 30 freely; 31 to 33 only with a written reason), and see a log of
   every admin action taken.

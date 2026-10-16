@@ -60,6 +60,7 @@ for (let n = 1; n <= count; n++) {
     })),
     codeOfConductAccepted: true,
     consentAccepted: true,
+    healthConsentAccepted: true,
   };
   const response = await fetch(`${baseUrl}/api/camp-registration`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
   const data = await response.json().catch(() => ({}));

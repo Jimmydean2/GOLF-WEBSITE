@@ -10,6 +10,7 @@
 // is listed in legal.ts for review by a Quebec lawyer; docs/QUEBEC_LEGAL_REVIEW.md prints it.
 
 import { business, juniorCamps, locations } from "../content";
+import { privacyOfficer } from "../privacy";
 import { b } from "./rich";
 import { formatMoney, formatDollars, joinNames } from "./format";
 
@@ -76,6 +77,7 @@ export const en = {
   week: {
     checking: "Checking availability…",
     full: "Full",
+    fullWaitlist: "Full. You can join the waiting list below.",
     spotsLeft: (n: number, max: number) => `${n} of ${max} spots left`,
     fillingUp: "Filling up fast — don't wait!",
   },
@@ -120,13 +122,12 @@ export const en = {
     payConfirm: "Your spot is confirmed once we verify the payment in our bank account.",
     payCancelFee: `Cancellations are subject to a $${juniorCamps.cancellationFee} administrative fee.`,
     payNotVenue: `No payments to ${venue.name} will be accepted.`,
-    infoConsent: `By submitting the registration form you agree that information may be disclosed to ${business.name} for the purpose of administering the junior golf camps. All information is confidential and shall not be shared without permission.`,
     submit: "Register Now",
     sending: "Sending…",
     notOpenYet: "Registration is not open yet",
     pickWeekFirst: "Please pick at least one camp week above.",
     fillEveryField: "Please fill in every field for each child.",
-    acceptBoth: "Please accept the code of conduct and information consent below.",
+    acceptBoth: "Please tick the code of conduct and both consent boxes below.",
     errorFallback: `Something went wrong. Please try again, or contact ${phone} directly.`,
     somethingWrong: "Something went wrong. Please try again.",
     notConnected: "Online registration is being finalized. In the meantime, reserve a spot by calling or emailing directly:",
@@ -181,7 +182,7 @@ export const en = {
     tooLong: "Some of the information entered is too long. Please shorten it and try again.",
     invalidEmail: "Please enter a valid email address.",
     invalidPhone: "Please enter each phone number with its area code, for example 514-555-0100.",
-    consentRequired: "Please accept the code of conduct and information consent to continue.",
+    consentRequired: "Please accept the code of conduct and both consents to continue.",
     invalidWeeks: "Please pick valid camp weeks.",
     tooManyChildren: (max: number) => `One registration can include up to ${max} children. For a larger group, please contact us at ${phone}.`,
     invalidBirthDate: (name: string) => `Please check the date of birth for ${name}.`,
@@ -215,6 +216,116 @@ export const en = {
     securityQuestion: `If your bank asks for a security question and answer, please call ${phone} and we'll sort it out.`,
     thenPage: "Then come back to this page and tap “I’ve Sent My Payment.” You don’t need to upload anything or create an account.",
     thenEmail: "Then open your reservation page (the button below) and tap “I’ve Sent My Payment.” You don’t need to upload anything or create an account.",
+  },
+
+  // The consent flow on the registration form (see docs/PRIVACY_AND_LAW25.md).
+  consent: {
+    panelTitle: "How we use your information",
+    panel: (days: number) =>
+      `We collect it to register your child, run the camp safely, take payment and contact you about it. Only the owner and the coaches and staff who run the camp see it. The providers that run our website, database and email handle it for us and may store it outside Quebec. We keep health information, dates of birth and emergency contacts for ${days} days after your child's last camp week, then erase them. You can ask to see, correct or erase your information at any time: ${phone} · ${business.email}.`,
+    privacyBefore: "I am the parent or legal guardian of each child I am registering. I have read the ",
+    privacyLink: "privacy notice",
+    privacyAfter: ` and I consent to ${business.name} collecting, using and keeping my information and my child's information to register my child, run the camp, take payment and contact me about it.`,
+    health: `I consent to ${business.name} collecting the health information I give about my child (allergies, medical conditions, medication) and sharing it only with the coaches and staff who supervise my child, so they can keep my child safe. I can ask to see, correct or erase it at any time.`,
+  },
+
+  // The optional waiting list for full weeks. It never registers a child or holds a place.
+  waitlist: {
+    heading: "Is your week full? Join the waiting list",
+    intro: `Joining the waiting list does not register your child and does not hold a place for you. If a place opens up we may email you, but places are first come, first served through the registration form above, so you would need to register right away. To be removed from the list, call ${phone} or reply to our email.`,
+    weeksLegend: "Which full weeks would you like to wait for?",
+    checking: "Checking availability…",
+    noFullWeeks: "Every week still has room. Please use the registration form above.",
+    name: "Your full name",
+    email: "Email address",
+    phone: "Phone (optional)",
+    places: "How many children would you register?",
+    consentBefore: `I agree that ${business.name} may use my name, email address and phone number only to contact me if a place opens in the weeks I chose, and keep them until those weeks have passed. I understand this does not register my child or hold a place. `,
+    consentLink: "Privacy notice",
+    submit: "Join the waiting list",
+    sending: "Sending…",
+    doneHeading: "You are on the waiting list",
+    done: (weeks: string, email: string) =>
+      `We have added you to the waiting list for ${weeks} and sent a confirmation to ${email}. This is not a registration, and no place is being held for you.`,
+    again: "Add another family",
+    errors: {
+      missing: "Please fill in your name and email address, choose at least one week and tick the box.",
+      consent: "Please tick the box so that we may email you if a place opens.",
+      weekHasRoom: (labels: string[]) => `Good news: ${labels.join("; ")} still ${labels.length > 1 ? "have" : "has"} places. Please register with the form above instead of joining the waiting list.`,
+      listFull: `This waiting list is full. Please call us at ${phone}.`,
+      off: `The waiting list is not available right now. Please call us at ${phone}.`,
+      tryAgain: "Something went wrong. Please try again or contact us directly.",
+    },
+  },
+
+  // The privacy notice page (draft: docs/QUEBEC_LEGAL_REVIEW.md lists it for a lawyer).
+  privacy: {
+    metaTitle: `Privacy notice | ${business.name}`,
+    heading: "Privacy notice: Junior Camps",
+    version: (version: string) => `Version ${version}`,
+    draftBanner: "DRAFT. This notice has not yet been reviewed by a lawyer or approved by the owner. It is shown on this test site only.",
+    intro: `This notice explains what personal information ${business.name} collects when you register a child for a junior camp, why we collect it, who can see it, where it is kept, how long we keep it and how to ask us about it.`,
+    responsibleHeading: "Who is responsible",
+    responsible: (name: string, email: string, telephone: string) =>
+      `${business.name} is responsible for the information you give us. The person in charge of protecting personal information is ${name}. You can reach them at ${email} or ${telephone}.`,
+    collectHeading: "What we collect",
+    collectItems: [
+      "About you, the parent or guardian: your name, email address and phone number (and a second phone number, if you give one).",
+      "About your child: name, date of birth and age.",
+      "Health information you choose to give about your child: allergies, medical conditions, medication.",
+      "Your emergency contact: name, relationship to your child and phone number.",
+      "About your registration: the weeks you chose, the amount, your payment reference, whether and when we confirmed your payment, the language you used and the consents you gave.",
+      "If you join a waiting list: your name, email address, phone number (if you give one), the number of children you would register, the weeks you chose and the language you used. Nothing about your child.",
+      "We never receive your bank or card details. You pay by Interac e-Transfer from your own bank, and we only see what your bank shows the account holder (usually your name and the amount).",
+      "To stop automated abuse, the website briefly keeps a scrambled (hashed) form of your internet address in a counter. It cannot be turned back into your address and is cleared automatically within a few days.",
+    ] as readonly string[],
+    whyHeading: "Why we collect it",
+    whyItems: [
+      "to register your child and hold their place;",
+      "to take payment and confirm it;",
+      "to run the camp safely (health information and emergency contacts);",
+      "to contact you about your registration: payment instructions, reminders, confirmation, changes and cancellations;",
+      "to keep the accounting records the law requires.",
+    ] as readonly string[],
+    noMarketing: "We do not sell your information, use it for advertising or send marketing messages. We email you only about your registration (and, if you join a waitlist, about that waitlist).",
+    whoHeading: "Who can see it",
+    who: [
+      "The owner, and the coaches and staff who run the camp, only to the extent they need it. For example, a coach sees the health notes and emergency contacts of the children they supervise.",
+    ] as readonly string[],
+    providersIntro: "Service providers that run the website for us. They handle the information on our behalf and may not use it for their own purposes:",
+    whoExtra: "We do not give your information to anyone else unless the law requires it or someone's safety is at risk (for example, telling paramedics about an allergy).",
+    whereHeading: "Where it is kept",
+    where: "Our providers keep information on servers that may be outside Quebec, including in the United States. It travels encrypted (https) and is protected by passwords and access controls.",
+    keepHeading: "How long we keep it",
+    keep: (days: number, years: number) => [
+      `${days} days after the last camp week you registered for, we erase your child's date of birth, the health information, your emergency contact, your phone numbers and your email address from our records.`,
+      `We keep for ${years} years only what tax and accounting rules require: your name as payer, the payment reference, the amounts and the dates.`,
+      "If you join a waitlist, we erase your request once that camp week has passed, or sooner if you ask.",
+    ],
+    protectHeading: "How we protect it",
+    protect: [
+      "Your reservation page can only be opened with the private link we email you.",
+      "Registration details are visible only to the owner, after a password sign-in that locks after repeated wrong attempts.",
+      "Emails to you never contain your child's date of birth or health information.",
+      "The database has safeguards against double-booking and keeps a record of who changed what.",
+      "If a confidentiality incident ever involves your information and presents a risk of serious harm, we will tell you and the Commission d’accès à l’information du Québec.",
+    ] as readonly string[],
+    rightsHeading: "Your rights",
+    rights: [
+      "See the information we hold about you and your child, and ask for a copy in a common electronic format.",
+      "Ask us to correct it.",
+      "Withdraw your consent, or ask us to erase your information. We may keep what the law requires us to keep (such as accounting records), and withdrawing consent may mean your child cannot take part.",
+    ] as readonly string[],
+    rightsContact: (email: string, telephone: string) => `We reply within 30 days. Write to ${email} or phone ${telephone}.`,
+    rightsComplaint: "If you are not satisfied with our answer, you may complain to the Commission d’accès à l’information du Québec (cai.gouv.qc.ca).",
+    childrenHeading: "Children",
+    children: "A child's information is collected from their parent or legal guardian, who gives the consent for them.",
+    cookiesHeading: "Cookies and tracking",
+    cookies: "This website does not use advertising or tracking cookies and does not use analytics services. The only cookie is the one used when the owner signs in to the administration pages.",
+    changesHeading: "Changes to this notice",
+    changes: "If this notice changes, the version above changes. The version you agreed to is saved with your registration.",
+    back: "Back to the camps page",
+    officerName: privacyOfficer.name,
   },
 
   email: {
@@ -279,6 +390,26 @@ export const en = {
       closing: (phoneNumber: string) => `Questions before camp day? Just reply to this email or reach us at ${phoneNumber}. We're looking forward to a great week!`,
       textClosing: (phoneNumber: string) => `Questions? Reply to this email or call ${phoneNumber}.`,
       textIntro: (children: string, plural: boolean) => `Payment has been received and ${children}'s spot${plural ? "s are" : " is"} confirmed for Junior Camp at ${venue.name}.`,
+    },
+
+    // The waiting list: what we say when someone joins, and when the owner tells them a place may be open.
+    // Neither promises or holds anything.
+    waitlistAck: {
+      subject: (weeks: string) => `You are on the waiting list for ${weeks}`,
+      heading: "You are on the waiting list",
+      intro: (first: string, weeks: string) => `Hi ${first}, we have added you to the waiting list for ${b(weeks)}.`,
+      notRegistration: "This is not a registration, and no place is being held for you. We cannot promise that a place will open.",
+      whatNext: "If a place opens, we may email you. Places are first come, first served through the registration form on our website, so you would need to register right away.",
+      remove: (phoneNumber: string) => `To be taken off the list, reply to this email or call ${phoneNumber}.`,
+    },
+    waitlistNotify: {
+      subject: (week: string) => `A place may have opened for ${week}`,
+      heading: "A place may be available",
+      intro: (first: string, week: string) => `Hi ${first}, a place may have opened up for ${b(week)}.`,
+      notHeld: "No place is being held for you, and we cannot promise one is still free when you read this. Places are first come, first served: if you would like one, please register on our website as soon as you can.",
+      button: "Go to the registration page",
+      textLink: "The registration page:",
+      remove: (phoneNumber: string) => `If you no longer need a place, reply to this email or call ${phoneNumber} and we will take you off the list.`,
     },
 
     // Sent when the owner cancels or releases a registration from the dashboard.

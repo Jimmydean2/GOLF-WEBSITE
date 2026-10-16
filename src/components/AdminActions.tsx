@@ -9,13 +9,23 @@ import { createContext, useCallback, useContext, useRef, useState, type ReactNod
 
 export type AdminResponse = { ok: boolean; status: number; data: Record<string, unknown> };
 type CallAdmin = (url: string, body?: unknown, method?: string) => Promise<AdminResponse>;
+// Saves a file the server builds (the roster downloads). Asks for the password first when it is
+// due, then hands the file to the browser. The message is for the screen either way.
+type DownloadAdmin = (url: string, body: unknown, fallbackName: string) => Promise<{ ok: boolean; message: string; filename?: string }>;
 
 const AdminCallContext = createContext<CallAdmin | null>(null);
+const AdminDownloadContext = createContext<DownloadAdmin | null>(null);
 
 export function useAdminCall(): CallAdmin {
   const call = useContext(AdminCallContext);
   if (!call) throw new Error("useAdminCall must be used inside <AdminActionsProvider>.");
   return call;
+}
+
+export function useAdminDownload(): DownloadAdmin {
+  const download = useContext(AdminDownloadContext);
+  if (!download) throw new Error("useAdminDownload must be used inside <AdminActionsProvider>.");
+  return download;
 }
 
 async function rawCall(url: string, body: unknown, method: string): Promise<AdminResponse> {
@@ -59,6 +69,38 @@ export function AdminActionsProvider({ children }: { children: ReactNode }) {
     [askForPassword]
   );
 
+  const downloadAdmin = useCallback<DownloadAdmin>(
+    async (url, body, fallbackName) => {
+      const send = () =>
+        fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+      let response = await send();
+      if (response.status === 403) {
+        const data = (await response.clone().json().catch(() => ({}))) as Record<string, unknown>;
+        if (data.code === "reauth_required") {
+          const confirmed = await askForPassword();
+          if (!confirmed) return { ok: false, message: "Password check cancelled. Nothing was downloaded." };
+          response = await send();
+        }
+      }
+      if (!response.ok) {
+        const data = (await response.json().catch(() => ({}))) as Record<string, unknown>;
+        return { ok: false, message: String(data.error ?? "Could not download the file. Nothing was saved.") };
+      }
+      const filename = /filename="([^"]+)"/.exec(response.headers.get("content-disposition") ?? "")?.[1] ?? fallbackName;
+      const blob = await response.blob();
+      const objectUrl = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = objectUrl;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(objectUrl);
+      return { ok: true, message: `Saved ${filename}.`, filename };
+    },
+    [askForPassword]
+  );
+
   async function submitPassword(event: React.FormEvent) {
     event.preventDefault();
     setBusy(true);
@@ -80,6 +122,7 @@ export function AdminActionsProvider({ children }: { children: ReactNode }) {
 
   return (
     <AdminCallContext.Provider value={callAdmin}>
+      <AdminDownloadContext.Provider value={downloadAdmin}>
       {children}
       {asking && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4" role="presentation">
@@ -93,7 +136,7 @@ export function AdminActionsProvider({ children }: { children: ReactNode }) {
             <h2 id="reauth-title" className="font-display text-lg font-semibold text-forest">
               Confirm your password
             </h2>
-            <p className="mt-1 text-sm text-ink-soft">Payment actions need your password again. This only happens every 15 minutes.</p>
+            <p className="mt-1 text-sm text-ink-soft">This action needs your password again. It only happens every 15 minutes.</p>
             <input
               type="password"
               autoFocus
@@ -123,6 +166,7 @@ export function AdminActionsProvider({ children }: { children: ReactNode }) {
           </form>
         </div>
       )}
+      </AdminDownloadContext.Provider>
     </AdminCallContext.Provider>
   );
 }

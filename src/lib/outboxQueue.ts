@@ -10,6 +10,8 @@ export type OutboxKind =
   | "parent_reminder"
   | "parent_release"
   | "parent_cancellation"
+  | "waitlist_ack"
+  | "waitlist_notify"
   | "coach_notice";
 
 // Idempotent: the same key is only ever stored once. Call it inside the transaction that
@@ -24,6 +26,22 @@ export async function enqueueEmail(
     `INSERT INTO email_outbox (dedupe_key, kind, registration_id) VALUES ($1, $2, $3)
      ON CONFLICT (dedupe_key) DO NOTHING`,
     [opts.dedupeKey ?? `${kind}:${registrationId}`, kind, registrationId]
+  );
+  return (rowCount ?? 0) > 0;
+}
+
+// The waiting list's two emails (we have your request; a place may be open). Like every other
+// email they are recorded in the same transaction that creates the reason for them.
+export async function enqueueWaitlistEmail(
+  client: Pool | PoolClient,
+  kind: "waitlist_ack" | "waitlist_notify",
+  waitlistEntryId: string,
+  dedupeKey: string
+): Promise<boolean> {
+  const { rowCount } = await client.query(
+    `INSERT INTO email_outbox (dedupe_key, kind, waitlist_entry_id) VALUES ($1, $2, $3)
+     ON CONFLICT (dedupe_key) DO NOTHING`,
+    [dedupeKey, kind, waitlistEntryId]
   );
   return (rowCount ?? 0) > 0;
 }

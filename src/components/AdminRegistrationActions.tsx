@@ -19,14 +19,14 @@ export type ActionTarget = {
   reinstateCount: number;
 };
 
-const INPUT =
+export const INPUT =
   "w-full rounded-lg border border-gold/40 bg-white px-3 py-2 text-sm text-ink outline-none focus:border-forest focus:ring-1 focus:ring-forest";
 const BTN_PRIMARY = "cursor-pointer rounded-full bg-forest px-4 py-2 text-sm font-semibold text-cream hover:bg-forest-dark disabled:opacity-60";
 const BTN_QUIET = "cursor-pointer text-sm font-semibold text-ink-soft hover:text-forest";
 const ACTION_BTN =
   "cursor-pointer rounded-full border border-gold/40 px-4 py-2 text-xs font-semibold text-forest hover:border-forest min-h-[40px]";
 
-function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) {
+export function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) {
   return (
     <div
       className="fixed inset-0 z-[90] flex items-end justify-center bg-black/50 p-3 sm:items-center"

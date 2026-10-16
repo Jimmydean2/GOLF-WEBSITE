@@ -4,7 +4,8 @@ import { FormEvent, useEffect, useId, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { business, juniorCamps, type CampWeekId } from "@/lib/content";
 import { calculateTotal } from "@/lib/pricing";
-import { formatMontrealLong, getMessages } from "@/lib/i18n";
+import { formatMontrealLong, getMessages, privacyPath } from "@/lib/i18n";
+import { RETENTION_DAYS } from "@/lib/privacy";
 import { weekLabel } from "@/lib/season";
 import type { Lang } from "@/lib/lang";
 import type { RegistrationWindow } from "@/lib/registrationWindow";
@@ -14,7 +15,7 @@ const CAMP_WEEK_IDS = new Set(juniorCamps.weeks.map((week) => week.id));
 
 type Status = "idle" | "sending" | "success" | "error";
 
-type WeekInfo = { taken: number; max: number; remaining: number; full: boolean; priceCents: number };
+type WeekInfo = { taken: number; max: number; remaining: number; full: boolean; priceCents: number; waitlistable?: boolean };
 type CapacityState = {
   loading: boolean;
   configured: boolean;
@@ -42,6 +43,7 @@ export default function CampRegistrationForm({ lang }: { lang: Lang }) {
   const [submittedTotalCents, setSubmittedTotalCents] = useState(0);
   const [codeOfConductAccepted, setCodeOfConductAccepted] = useState(false);
   const [consentAccepted, setConsentAccepted] = useState(false);
+  const [healthConsentAccepted, setHealthConsentAccepted] = useState(false);
   const [children, setChildren] = useState<ChildEntry[]>([newChild()]);
   const [idempotencyKey, setIdempotencyKey] = useState(() => crypto.randomUUID());
   const [capacity, setCapacity] = useState<CapacityState>({
@@ -189,7 +191,7 @@ export default function CampRegistrationForm({ lang }: { lang: Lang }) {
       setErrorMessage(f.fillEveryField);
       return;
     }
-    if (!codeOfConductAccepted || !consentAccepted) {
+    if (!codeOfConductAccepted || !consentAccepted || !healthConsentAccepted) {
       setStatus("error");
       setErrorMessage(f.acceptBoth);
       return;
@@ -224,6 +226,7 @@ export default function CampRegistrationForm({ lang }: { lang: Lang }) {
           })),
           codeOfConductAccepted,
           consentAccepted,
+          healthConsentAccepted,
         }),
       });
       const result = await response.json();
@@ -244,6 +247,7 @@ export default function CampRegistrationForm({ lang }: { lang: Lang }) {
         setChildren([newChild()]);
         setCodeOfConductAccepted(false);
         setConsentAccepted(false);
+        setHealthConsentAccepted(false);
         // A fresh key for the next registration this visitor might submit —
         // reusing the old one would otherwise look like a retry of the
         // submission that just succeeded.
@@ -405,7 +409,7 @@ export default function CampRegistrationForm({ lang }: { lang: Lang }) {
                 )}
                 <span className="font-display text-base font-semibold pr-6">{weekLabel(week, lang)}</span>
                 <span className={`mt-1 block text-xs ${selected ? "text-cream/80" : "text-ink-soft"}`}>
-                  {capacity.loading || !info ? m.week.checking : full ? m.week.full : m.week.spotsLeft(info.remaining, info.max)}
+                  {capacity.loading || !info ? m.week.checking : full ? (info.waitlistable ? m.week.fullWaitlist : m.week.full) : m.week.spotsLeft(info.remaining, info.max)}
                 </span>
                 {week.note && (
                   <span className={`mt-1 block text-xs ${selected ? "text-cream/80" : "text-ink-soft"}`}>{week.note[lang]}</span>
@@ -475,15 +479,37 @@ export default function CampRegistrationForm({ lang }: { lang: Lang }) {
         </ul>
       </div>
 
-      <label className="flex items-start gap-3">
-        <input
-          type="checkbox"
-          checked={consentAccepted}
-          onChange={(e) => setConsentAccepted(e.target.checked)}
-          className="mt-1 h-4 w-4 flex-none rounded border-gold/40 text-forest focus:ring-forest"
-        />
-        <span className="text-sm text-ink-soft">{f.infoConsent}</span>
-      </label>
+      <div className="rounded-xl border border-gold/30 bg-white p-5">
+        <h4 className="font-display text-base font-semibold text-forest">{m.consent.panelTitle}</h4>
+        <p className="mt-2 text-sm text-ink-soft">{m.consent.panel(RETENTION_DAYS)}</p>
+      </div>
+
+      <div className="space-y-4">
+        <label className="flex items-start gap-3">
+          <input
+            type="checkbox"
+            checked={consentAccepted}
+            onChange={(e) => setConsentAccepted(e.target.checked)}
+            className="mt-1 h-4 w-4 flex-none rounded border-gold/40 text-forest focus:ring-forest"
+          />
+          <span className="text-sm text-ink-soft">
+            {m.consent.privacyBefore}
+            <a href={privacyPath(lang)} target="_blank" rel="noopener noreferrer" className="font-semibold text-forest underline underline-offset-2">
+              {m.consent.privacyLink}
+            </a>
+            {m.consent.privacyAfter}
+          </span>
+        </label>
+        <label className="flex items-start gap-3">
+          <input
+            type="checkbox"
+            checked={healthConsentAccepted}
+            onChange={(e) => setHealthConsentAccepted(e.target.checked)}
+            className="mt-1 h-4 w-4 flex-none rounded border-gold/40 text-forest focus:ring-forest"
+          />
+          <span className="text-sm text-ink-soft">{m.consent.health}</span>
+        </label>
+      </div>
 
       <button
         type="submit"

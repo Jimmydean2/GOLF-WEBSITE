@@ -1,101 +1,87 @@
-# Is the registration ready for French-speaking families?
+# French and English: what is built, and what still needs a human
 
-**Short answer: no. Every page and every email a parent sees is in English only.** Nothing is
-broken, but if the camp is marketed to the public in Quebec this is the biggest launch decision
-that is *not* a technical one. This page measures the gap, explains the rules as far as a
-non-lawyer can, and gives you three ways forward.
+**Short answer: the whole parent journey now exists in both languages** (camp pages, the
+registration form and its consent boxes, the family's private reservation page, the payment
+instructions, the instructions / reminder / release / confirmation / cancellation emails, and the
+privacy notice). The French is a **careful draft that nobody from Quebec has read yet**. Two
+things have to happen before launch, and neither is code: a **native Quebec reader** goes through
+the French, and a **Quebec lawyer** looks at the passages listed in
+[`QUEBEC_LEGAL_REVIEW.md`](QUEBEC_LEGAL_REVIEW.md).
 
-> This is a readiness audit, not legal advice. Quebec's language rules have changed recently and
-> have details I cannot judge. Please have a Quebec lawyer, or the Office québécois de la langue
-> française (OQLF), confirm what applies to the camp before you rely on anything below.
+> This is not legal advice. Quebec's language rules have changed recently and have details I
+> cannot judge. The Charter of the French Language and Bill 96 appear to expect French to be
+> available, and at least as prominent as English, for a business that serves Quebec families
+> online, and (section 55) to offer a standard take-it-or-leave-it contract in French first. Please
+> have a Quebec lawyer, or the Office québécois de la langue française (OQLF), confirm what applies
+> before you rely on any of this. Sources I read: [Canadian Marketing Association](https://www.thecma.ca/topic/articles/2022/08/09/the-impact-of-quebec-s-new-language-law-on-marketing),
+> [Gowling WLG](https://gowlingwlg.com/en/insights-resources/articles/2023/bill-96-s-french-first-rule-takes-effect/),
+> [Osler](https://www.osler.com/en/insights/updates/quebec-makes-sweeping-changes-to-its-french-language-laws/).
 
 ---
 
-## 1. What the rules appear to say
+## 1. How it works for a parent
 
-| Rule | What it means for the camp | Source |
+| | English | Français |
 | --- | --- | --- |
-| **The Charter of the French Language** requires businesses to inform and serve clients in French. Law-firm and marketing-association summaries say this already reaches **websites, social media and newsletters** of organizations providing goods or services in Quebec. | A camp site that takes registrations from Quebec families should be available in French, with French at least as prominent and as good as the English. | [Canadian Marketing Association](https://www.thecma.ca/topic/articles/2022/08/09/the-impact-of-quebec-s-new-language-law-on-marketing), [CFIB summary of Bill 96](https://cfib-fcei.ca/en/site/qc-law-14-bill-96) |
-| **"French first" for contracts of adhesion** (section 55, in force since **June 1, 2023**). A standard contract offered take-it-or-leave-it may bind the customer in English only if a **French version was provided first** and the customer then chose English. | The camp's two acceptance boxes (code of conduct, information consent) and the payment terms ("Cancellations are subject to a $50 administrative fee") may count. A "choose your language" line is not enough. | [Gowling WLG](https://gowlingwlg.com/en/insights-resources/articles/2023/bill-96-s-french-first-rule-takes-effect/), [Osler](https://www.osler.com/en/insights/updates/quebec-makes-sweeping-changes-to-its-french-language-laws/) |
-| **Enforcement** is by complaint to the OQLF. | The practical risk is a complaint from a parent or competitor, not an inspection. | the same summaries |
+| Home | `/` | `/fr` |
+| Camp page and registration form | `/junior-camps` | `/fr/camps-juniors` |
+| Privacy notice | `/privacy` | `/fr/confidentialite` |
+| A family's private reservation page | `/camp-registration/<link>` | `/fr/inscription-camp/<link>` (same link, other language) |
 
-Questions only a lawyer can answer: whether the camp's materials are caught as written;
-whether the acceptance text is a "contract of adhesion"; and what is required for the existing
-non-registration pages (lessons, clinics, about).
+- A **language switch** ("Français" / "English") sits in the header of every page. On a family's
+  private page it keeps them on the *same* reservation.
+- The page language is the **parent's choice** and is saved with the registration. Every email to
+  that family (instructions, reminder, release notice, confirmation, cancellation notice) is written
+  in that language **at the moment it is sent**, so a retried email is still in the right language.
+- Nothing is guessed from the browser. A French-speaking parent who lands on the English page
+  sees "Voir cette page en français" at the top, in French.
+- `<html lang="fr-CA">`, `hreflang` pairs, French page titles, and the private-page "do not
+  index / do not cache" headers apply to the French addresses too.
+- Formats: `436,91 $`, "21, 22, 23 et 25 juin", "sam. 17 oct., 0 h 30 (heure de Montréal)",
+  TPS (5 %) / TVQ (9,975 %), "virement Interac", non-breaking spaces before `:`, `;`, `%`, `$` and
+  inside « ».
 
-## 2. How much English is there? (measured)
+**Your own emails and the dashboard stay English on purpose** (they are for you). A registration
+from a francophone family is tagged "Français" in the review queue and in search, and the
+notification email says "reply in French".
 
-`node scripts/i18n-audit.mjs` counts the English a parent can see in the registration journey
-(approximate, ±10%):
+## 2. What I tested
 
-| Area | Strings | Words |
-| --- | ---: | ---: |
-| Registration form (labels, buttons, consent text, payment explanation) | 42 | 317 |
-| Camp information pages (what a parent reads first) | 42 | 193 |
-| Parent's private reservation page | 21 | 166 |
-| Messages the registration API shows (errors, "already registered", "week full") | 38 | 385 |
-| Payment instructions (page and email, shared) | 5 | 77 |
-| Emails to parents (instructions, reminder, release notice, confirmation) | 114 | 746 |
-| Camp content (week labels, what to bring, safety notes) | 78 | 610 |
-| **Total** | **~340** | **~2,500** |
+`npm run test:i18n` (85 checks) plus a real-browser run (36 checks, phone and desktop):
 
-(The administrator's dashboard and the emails to you are English on purpose; they are for you.)
+- The two dictionaries have the **same keys and the same placeholders**: a missing or extra
+  piece of French fails the tests.
+- Every French message is French (none left in English) and the typography rules above hold,
+  including elision such as "d'Émilie".
+- Money, dates and week names come out right in both languages; the two holiday weeks explain
+  themselves ("Fête nationale du Québec", "Canada Day").
+- The registration API answers (errors, "already registered", "week full") in the family's
+  language, for every stable error code.
+- Each email is in the family's language, contains no health note / birth date / emergency
+  contact, and the confirmation email reads correctly in both.
+- A cancellation notice is sent once per cancellation, in the family's language, **never shows the
+  owner's private note**, and is not sent to an erased family.
+- In a real Chromium: a francophone parent on a phone and an anglophone family on a laptop each
+  register end to end; every step is in their language; no sideways scrolling.
 
-### English-only formatting that also needs attention
+## 3. What still needs you (see `QUEBEC_LEGAL_REVIEW.md`)
 
-| Today | French Canada |
-| --- | --- |
-| `<html lang="en">` | `lang="fr"` on French pages, and an `hreflang` pair so search engines and screen readers know |
-| `$436.91` | `436,91 $` |
-| "Fri, Jul 10, 9:45 p.m." (`en-CA`) | "ven. 10 juill., 21 h 45" |
-| "Interac e-Transfer" | "virement Interac" |
-| "GST (5%) / QST (9.975%)" | "TPS (5 %) / TVQ (9,975 %)" |
-| Camp week labels "June 22, 23, 25 & 26" | "22, 23, 25 et 26 juin" |
-| Error messages in English (each already carries a stable code, e.g. `weeks_full`) | translated by code |
+1. **A native Quebec-French reader** for all the dictionary text (about 400 lines per language).
+   I wrote a careful draft, not a certified translation. The consent and cancellation passages
+   especially.
+2. **A Quebec lawyer** on the 15 flagged passages (L1 to L15) and the extra questions (a
+   cancellation fee that does not say per child or per week, "Certain conditions may apply",
+   "send your child home", health-data consent, where data is stored, the 12-hour automatic
+   release).
+3. **The pages that stay English** (lessons, clinics, about, contact, booking). The camp journey
+   is bilingual; the rest of the site is not (L9). Ask the lawyer whether those need French too.
+4. **The word "Interac"** in the payment instructions: check it against what your own bank's
+   screens say, so parents are not told to look for a button that is named differently.
 
-### What already works for French
+## 4. How a translation is changed later
 
-- **Accented names** go through the whole system intact (form → database → emails → roster
-  spreadsheet). Tested with a real mail conversation (`npm run test:smtp-stack`): "Émilie Côté"
-  arrives correctly in subjects and bodies.
-- Duplicate detection ignores accents and capital letters ("Émile" and "emile" are the same child).
-- The API returns a stable `code` with every error, which is what a French page would translate.
-- Money, dates and week names are produced in a few helper functions (`pricing.ts`, `payment.ts`,
-  `content.ts`), not scattered through the pages.
-
-## 3. What building it involves
-
-| Piece | Work |
-| --- | --- |
-| Translations (about 2,500 words, plus the legal-sounding acceptance text) | A **professional Quebec-French translation** and a review by a native speaker. Machine translation is not suitable for the consent and cancellation text. |
-| French pages | A language switch and `/fr/…` versions of the camp pages, the form and the private reservation page, using one dictionary per language. About 2–3 days of development. |
-| French emails | The parent's language is saved with the registration (one new column) and every email is built in that language, including the reminder and the release notice. About 1 day. |
-| Formats | `fr-CA` formatting for dates, money and the tax names. Half a day. |
-| Tests | The same suites, run in both languages; a check that no English string remains on a French page. About 1 day. |
-
-Roughly **5 working days of development plus the translation**, which I can start as soon as you decide and the translation exists.
-
-## 4. Your options
-
-| | What it is | Risk | Cost |
-| --- | --- | --- | --- |
-| **A. Bilingual at launch** (recommended if the camp is advertised publicly in Quebec) | French and English versions of the registration journey, translated and reviewed, before launch | Lowest legal risk; best experience for francophone families | Translation fee + about a week of development |
-| **B. English at launch, French soon after** | Launch in English with a clear French contact line ("Pour vous inscrire en français, appelez le 514-816-3454"), build French in the first weeks | Some exposure until French exists (a complaint is possible); francophone families may phone instead | Same cost, spread out |
-| **C. English only** | As it is today | Highest: language-law exposure, and you lose or burden francophone families | None |
-
-The camp is in Dorval, in a bilingual community, and most families probably read English, but
-the legal duty does not depend on that.
-
-## 5. A related issue: personal-information law (Law 25)
-
-The form collects **children's names, birth dates and health information**. Quebec's private-sector
-privacy law (Law 25) is relevant, and **the site has no privacy notice today**; the form's consent
-sentence is two lines. From the compliance guides I read (to be confirmed with counsel):
-the business must name a person in charge of personal information and publish how to reach them,
-publish a plain-language privacy policy on the site, get a parent's consent for children under 14,
-keep a register of confidentiality incidents, and assess a transfer of personal information outside
-Quebec before it happens (the site stores data with Neon, Vercel, Google and, optionally, Google
-Sheets). Sources: [CFIB](https://www.cfib-fcei.ca/en/site/qc-law-25), [CookieYes summary](https://www.cookieyes.com/blog/quebec-law-25/).
-
-This is listed as a decision in docs/LAUNCH_CHECKLIST.md. It is separate from French, but a
-privacy notice has to exist in French as well.
+Text lives in `src/lib/i18n/en.ts` and `src/lib/i18n/fr.ts` (one entry per message, the same keys
+in both). Edit the French there. `npm run test:i18n` refuses a French entry that is missing, has
+different placeholders, is still English, or breaks the typography rules. If you change a passage
+that is flagged for the lawyer, run `npm run legal:write` to refresh `docs/QUEBEC_LEGAL_REVIEW.md`
+(a test fails if it is out of date).

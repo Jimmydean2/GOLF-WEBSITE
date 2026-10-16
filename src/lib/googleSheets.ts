@@ -72,6 +72,14 @@ export type CampRegistrationRow = {
   reference: string;
 };
 
+// The camp's Google Sheets copy is OFF unless the owner switches it on with CAMP_SHEETS_COPY=true.
+// It would hold an extra copy of every child's date of birth and health note outside the database,
+// where erasing a family and the season clean-up could not reach it. The database and the roster
+// downloads are the record; availability and bookings never read Google.
+export function isCampSheetsCopyEnabled(): boolean {
+  return process.env.CAMP_SHEETS_COPY === "true" && isGoogleSheetsConfigured();
+}
+
 export function isGoogleSheetsConfigured(): boolean {
   return isGoogleServiceAccountConfigured() && Boolean(process.env.GOOGLE_SHEETS_SHEET_ID);
 }

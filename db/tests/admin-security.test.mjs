@@ -419,7 +419,7 @@ console.log("\n=== 13. Page headers: no framing, no caching of private pages ===
   const rules = await config.headers();
   const forPath = (source) => rules.find((r) => r.source === source);
   const value = (rule, key) => rule?.headers.find((x) => x.key.toLowerCase() === key.toLowerCase())?.value;
-  const privatePaths = ["/admin/:path*", "/api/admin/:path*", "/camp-registration/:path*", "/api/camp-registration/:path*"];
+  const privatePaths = ["/admin/:path*", "/api/admin/:path*", "/camp-registration/:path*", "/fr/inscription-camp/:path*", "/api/camp-registration/:path*"];
   for (const source of privatePaths) {
     const r = forPath(source);
     check(`${source}: another website cannot frame it (clickjacking): X-Frame-Options and CSP frame-ancestors`, value(r, "X-Frame-Options") === "DENY" && /frame-ancestors 'none'/.test(value(r, "Content-Security-Policy") ?? ""));

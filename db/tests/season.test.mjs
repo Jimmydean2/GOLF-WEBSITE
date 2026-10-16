@@ -159,7 +159,9 @@ console.log("\n=== 6. No stale year or old-style week id anywhere in the source 
     for (const name of readdirSync(dir)) {
       const p = join(dir, name);
       if (statSync(p).isDirectory()) walk(p);
-      else if (/\.(ts|tsx)$/.test(name) && !p.endsWith("src/lib/season.ts")) {
+      // season.ts is the calendar itself; privacy.ts holds the notice's version date and legal.ts
+      // is prose for a lawyer: both may mention other years.
+      else if (/\.(ts|tsx)$/.test(name) && !p.endsWith("src/lib/season.ts") && !p.endsWith("src/lib/privacy.ts") && !p.endsWith("src/lib/i18n/legal.ts")) {
         const text = readFileSync(p, "utf8");
         for (const m of text.matchAll(/\b(20[2-3]\d)\b/g)) if (Number(m[1]) !== SEASON_YEAR) hits.push(`${p}: ${m[1]}`);
         for (const m of text.matchAll(/["'`](jun|jul|aug)\d\d["'`]/g)) hits.push(`${p}: old week id ${m[0]}`);
@@ -215,6 +217,7 @@ console.log("\n=== 8. The registration endpoint enforces it, and a refused attem
     emergencyPhone: "514-555-0102",
     codeOfConductAccepted: true,
     consentAccepted: true,
+    healthConsentAccepted: true,
     children: [{ fullName: `TEST Child ${n}`, dateOfBirth: "2018-05-05", age: "9", healthInfo: "none" }],
     weeks: [firstWeek],
   });

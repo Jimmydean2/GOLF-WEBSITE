@@ -7,6 +7,7 @@ import { formatMontreal } from "@/lib/payment";
 import { labelForWeekId } from "@/lib/season";
 import { useAdminCall } from "./AdminActions";
 import RegistrationActionButtons from "./AdminRegistrationActions";
+import FamilyPrivacyButtons from "./AdminPrivacyActions";
 
 type AuditEntry = {
   id: string;
@@ -92,7 +93,7 @@ export default function AdminCampTools() {
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Reference, child's name, parent's name, or email"
+            placeholder="Reference, child's name, parent's name, email, phone or amount"
             aria-label="Search registrations"
             className="min-w-0 flex-1 rounded-lg border border-gold/40 bg-white px-4 py-2.5 text-ink outline-none focus:border-forest focus:ring-1 focus:ring-forest"
           />
@@ -104,6 +105,11 @@ export default function AdminCampTools() {
             {searching ? "Searching…" : "Search"}
           </button>
         </form>
+        <p className="mt-2 text-xs text-ink-soft">
+          A deposit with no reference? Search the amount it was for (for example 436.91) to see the unpaid, held or released
+          registrations it could belong to, or the sender&apos;s name or phone number. A family that paid but never tapped the button can
+          be confirmed from here: find them, then use Confirm payment.
+        </p>
 
         {message && (
           <p role="status" className="mt-3 text-sm font-medium text-forest">
@@ -154,6 +160,7 @@ export default function AdminCampTools() {
                     onChanged={(m) => {
                       setMessage(m);
                       loadResults();
+                      window.dispatchEvent(new Event("camp-admin-changed"));
                     }}
                   />
                   <button
@@ -163,7 +170,7 @@ export default function AdminCampTools() {
                   >
                     Resend notification
                   </button>
-                  {r.status === "paid" && (
+                  {r.status === "paid" && !r.anonymizedAt && (
                     <button
                       type="button"
                       onClick={() => resendEmail(r.id, "parent")}
@@ -172,6 +179,15 @@ export default function AdminCampTools() {
                       Resend confirmation
                     </button>
                   )}
+                  <FamilyPrivacyButtons
+                    target={{ id: r.id, reference: r.reference, status: r.status, childNames: r.children.map((c) => c.fullName) }}
+                    erasedAt={r.anonymizedAt}
+                    onChanged={(m) => {
+                      setMessage(m);
+                      loadResults();
+                      window.dispatchEvent(new Event("camp-admin-changed"));
+                    }}
+                  />
                 </div>
               </li>
             ))}

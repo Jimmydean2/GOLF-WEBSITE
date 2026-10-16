@@ -553,3 +553,50 @@ Nothing is confirmed until you see the deposit in your bank account.
 Dashboard (login required): ${opts.dashboardUrl}`;
   return { subject, html, text };
 }
+
+// --- the waiting list ----------------------------------------------------------------------
+// Two emails, neither of which promises or holds anything.
+
+export type WaitlistEmailInput = { parentName: string; language: Lang; weekIds: string[] };
+
+export function buildWaitlistAckEmail(entry: WaitlistEmailInput): { subject: string; html: string; text: string } {
+  const lang = entry.language;
+  const e = getMessages(lang).email.waitlistAck;
+  const weeks = entry.weekIds.map((id) => labelForWeekId(id, lang)).join("; ");
+  const first = entry.parentName.split(" ")[0] || entry.parentName;
+  const intro = e.intro(first, weeks);
+  const html = emailShell(
+    `
+    <p style="margin:0 0 16px; font-family:Georgia,'Times New Roman',serif; font-size:20px; font-weight:bold; color:${FOREST};">${escapeHtml(e.heading)}</p>
+    <p style="margin:0 0 12px; font-size:14px; color:${INK_SOFT}; line-height:1.6;">${renderRichHtml(intro)}</p>
+    <p style="margin:0 0 12px; font-size:14px; color:#1b1b16; line-height:1.6; font-weight:bold;">${escapeHtml(e.notRegistration)}</p>
+    <p style="margin:0 0 12px; font-size:14px; color:${INK_SOFT}; line-height:1.6;">${escapeHtml(e.whatNext)}</p>
+    <p style="margin:0; font-size:12px; color:${INK_SOFT}; line-height:1.6;">${escapeHtml(e.remove(business.phone))}</p>
+  `,
+    lang
+  );
+  const text = `${e.heading}\n\n${renderRichText(intro)}\n\n${e.notRegistration}\n\n${e.whatNext}\n\n${e.remove(business.phone)}`;
+  return { subject: e.subject(weeks), html, text };
+}
+
+export function buildWaitlistNotifyEmail(entry: WaitlistEmailInput, opts: { registerUrl: string }): { subject: string; html: string; text: string } {
+  const lang = entry.language;
+  const e = getMessages(lang).email.waitlistNotify;
+  const week = labelForWeekId(entry.weekIds[0], lang);
+  const first = entry.parentName.split(" ")[0] || entry.parentName;
+  const intro = e.intro(first, week);
+  const html = emailShell(
+    `
+    <p style="margin:0 0 16px; font-family:Georgia,'Times New Roman',serif; font-size:20px; font-weight:bold; color:${FOREST};">${escapeHtml(e.heading)}</p>
+    <p style="margin:0 0 12px; font-size:14px; color:${INK_SOFT}; line-height:1.6;">${renderRichHtml(intro)}</p>
+    <p style="margin:0 0 16px; font-size:14px; color:#1b1b16; line-height:1.6; font-weight:bold;">${escapeHtml(e.notHeld)}</p>
+    <table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 auto 16px;"><tr><td style="border-radius:999px; background:${GOLD};">
+      <a href="${escapeHtml(opts.registerUrl)}" style="display:inline-block; padding:14px 28px; font-size:14px; font-weight:bold; color:#1b1b16; text-decoration:none;">${escapeHtml(e.button)}</a>
+    </td></tr></table>
+    <p style="margin:0; font-size:12px; color:${INK_SOFT}; line-height:1.6;">${escapeHtml(e.remove(business.phone))}</p>
+  `,
+    lang
+  );
+  const text = `${e.heading}\n\n${renderRichText(intro)}\n\n${e.notHeld}\n\n${e.textLink}\n${opts.registerUrl}\n\n${e.remove(business.phone)}`;
+  return { subject: e.subject(week), html, text };
+}

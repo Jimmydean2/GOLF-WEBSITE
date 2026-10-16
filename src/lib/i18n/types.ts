@@ -8,10 +8,12 @@ type Widen<T> = T extends string
   ? string
   : T extends readonly string[]
     ? readonly string[]
-    : T extends (...args: infer A) => string
-      ? (...args: A) => string
-      : T extends object
-        ? { [K in keyof T]: Widen<T[K]> }
-        : T;
+    : T extends (...args: infer A) => string[]
+      ? (...args: A) => string[]
+      : T extends (...args: infer A) => string
+        ? (...args: A) => string
+        : T extends object
+          ? { [K in keyof T]: Widen<T[K]> }
+          : T;
 
 export type Messages = Widen<typeof en>;

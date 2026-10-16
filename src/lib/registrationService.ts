@@ -19,6 +19,7 @@ import { registrationWindow } from "./registrationWindow";
 import { formatMontreal } from "./payment";
 import { labelForWeekId, season } from "./season";
 import { parseLang, type Lang } from "./lang";
+import { PRIVACY_NOTICE_VERSION } from "./privacy";
 import { getMessages, reservationPath, type Messages } from "./i18n";
 
 // Server-only. Everything the registration form's POST does, kept apart from the Next.js
@@ -124,7 +125,7 @@ export function validateRegistrationBody(body: Record<string, unknown>, now: Dat
     return fail("invalid_phone", m.invalidPhone);
   }
 
-  if (body.codeOfConductAccepted !== true || body.consentAccepted !== true) {
+  if (body.codeOfConductAccepted !== true || body.consentAccepted !== true || body.healthConsentAccepted !== true) {
     return fail("consent_required", m.consentRequired);
   }
   if (weekIds.some((w) => !VALID_WEEKS.includes(w))) return fail("invalid_weeks", m.invalidWeeks);
@@ -159,6 +160,8 @@ export function validateRegistrationBody(body: Record<string, unknown>, now: Dat
       emergencyPhone,
       codeOfConductAccepted: true,
       consentAccepted: true,
+      healthConsentAccepted: true,
+      consentVersion: PRIVACY_NOTICE_VERSION,
       language: lang,
       children: kids,
       weekIds,

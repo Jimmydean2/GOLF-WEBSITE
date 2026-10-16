@@ -69,6 +69,7 @@ const families = Array.from({ length: FAMILIES }, (_, i) => {
       children: Array.from({ length: kidCount }, (_, k) => ({ fullName: `Kid${i}x${k} Simulated`, dateOfBirth: `201${2 + ((i + k) % 8)}-0${1 + ((i + k) % 9)}-1${(i + k) % 9}`, age: String(7 + ((i + k) % 8)), healthInfo: "none" })),
       codeOfConductAccepted: true,
       consentAccepted: true,
+      healthConsentAccepted: true,
     },
   };
 });

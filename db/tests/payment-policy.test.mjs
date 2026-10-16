@@ -200,7 +200,9 @@ console.log("\n=== 5. Time-limited extensions ===");
   const r1 = await reg(id);
   check("before the review is due, an extension adds its hours to the current review time", first.ok && new Date(r1.review_due_at).getTime() === dueBefore + 24 * HOUR && r1.extension_count === 1);
   check("it counts, reports what is left, and changes nothing else", first.extensionsLeft === 1 && r1.status === "payment_reported" && r1.spotsActive === r1.spotsTotal && r1.paid_at === null);
-  check("it is audited with the note and both review times", (await auditFor(id)).some((a) => a.action === "extend_review" && a.details.note.includes("pending") && a.details.extensionNumber === 1));
+  check("it is audited (that a note exists and both review times), and the note itself is kept where erasing the family can reach it",
+    (await auditFor(id)).some((a) => a.action === "extend_review" && a.details.hasNote === true && a.details.note === undefined && a.details.extensionNumber === 1)
+    && (await pool.query(`SELECT note FROM admin_notes WHERE registration_id = $1 AND action = 'extend_review'`, [id])).rows.some((r) => r.note.includes("pending")));
 
   await makeOverdue(id, 5);
   const second = await grantReviewExtension(id, { hours: 12, note: "parent sent the bank's confirmation number" });

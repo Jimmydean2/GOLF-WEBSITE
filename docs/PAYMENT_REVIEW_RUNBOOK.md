@@ -133,7 +133,10 @@ regardless.
 Money received is never lost, and never silently ignored:
 
 1. Find the family: open *Recently released* in the queue (it covers the last 14
-   days), or search by their reference or name.
+   days), or search by their reference, name, email, phone number, **or the
+   amount of the deposit** (for example `436.91`: it lists the unpaid, held or
+   released registrations for exactly that amount, which is the way in when the
+   bank message has no reference). See `ROSTERS_CONFIRMING_AND_WAITLIST.md` §2.
 2. Click **Reinstate & confirm payment**, enter what you see in the bank.
 3. If the week still has room, the spots come back and the registration is
    **Paid**. The confirmation shows whether they paid within their original 12
@@ -144,6 +147,8 @@ Money received is never lost, and never silently ignored:
    - if it is operationally appropriate (enough coaches, ratios, venue), raise
      that week by one (section 7). It must be a conscious decision, with a
      written reason;
+   - if you offer the waiting list (`ROSTERS_CONFIRMING_AND_WAITLIST.md` §3), it
+     only lets you tell a family a place *may* be open: it never holds one;
    - never overbook silently: the system will not allow it.
 
 The release email a family receives tells them to reply with their reference if
