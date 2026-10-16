@@ -1,5 +1,13 @@
 # Private lessons and group clinics: architecture review and proposal
 
+> **Superseded in part (2026-10-16).** You have since decided A1, A2, B1, B2, C1 to C3 and G1, and asked for a
+> Google Calendar fail-safe. Where this review disagrees, `docs/LESSONS_AND_CLINICS_DESIGN.md` wins. The changes:
+> **E3** ("allow the reservation if Google is unreachable, and flag it") is replaced by **refuse and offer to contact
+> you**; **C3** (packs sold as a booked series) is replaced by flexible credits that are designed but **off** until you
+> approve the rules; **B1** (55 versus 50 + 10) is replaced by a configurable 60-minute slot; **G1** (a one-time import)
+> is replaced by "no import, audit first, reconcile by hand"; the build is on the separate branch
+> `claude/lessons-clinics-booking`. See `docs/LESSONS_AND_CLINICS_DECISIONS.md` for what is still open.
+
 **Status: a proposal for your decision. Nothing in this document has been built.** No code was changed, nothing was
 merged or deployed, no payment was activated and no paid service was added. This is separate from the camp and from the
 informational-website launch (section 2).
