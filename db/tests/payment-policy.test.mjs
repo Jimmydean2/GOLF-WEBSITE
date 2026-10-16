@@ -30,7 +30,8 @@ console.log("=== 1. A reservation: reference, amount due, and a 12-hour hold ===
 {
   await resetAll();
   const before = Date.now();
-  const r = await reserveRegistration(input("basic", { children: kids(2, "B"), weekIds: ["jul13", "jul20"] }));
+  const basicInput = input("basic", { children: kids(2, "B"), weekIds: ["jul13", "jul20"] });
+  const r = await reserveRegistration(basicInput);
   check("reservation succeeds", r.ok);
   check("the reference looks like GD-XXXXXX with no look-alike characters", /^GD-[A-HJ-NP-Z2-9]{6}$/.test(r.reference), r.reference);
   check("the amount due is the price plus GST and QST", r.amountDueCents === calculateTotal(r.totalPriceCents).totalCents && r.amountDueCents > r.totalPriceCents);
@@ -39,8 +40,10 @@ console.log("=== 1. A reservation: reference, amount due, and a 12-hour hold ===
   const row = await reg(r.registrationId);
   check("stored as Awaiting Payment with the original hold end remembered", row.status === "pending_payment" && row.payment_reported_at === null && new Date(row.hold_ends_at_initial).getTime() === new Date(row.hold_expires_at).getTime());
 
-  const again = await reserveRegistration({ ...input("basic"), idempotencyKey: (await pool.query(`SELECT idempotency_key FROM registrations WHERE id=$1`, [r.registrationId])).rows[0].idempotency_key });
+  const again = await reserveRegistration({ ...basicInput });
   check("a retried submission returns the same reservation, reference and amount", again.ok && again.alreadyExisted && again.registrationId === r.registrationId && again.reference === r.reference && again.amountDueCents === r.amountDueCents);
+  const borrowed = await reserveRegistration({ ...basicInput, email: "someone.else@example.test" });
+  check("the same key from a different email is refused: it does not return another family's reservation", !borrowed.ok && borrowed.reason === "idempotency_conflict");
 
   // Spread over several weeks so no week reaches its 30-child limit while we count references.
   const spread = ["jun22", "jun29", "jul06", "jul13", "jul20", "jul27", "aug03", "aug10"];

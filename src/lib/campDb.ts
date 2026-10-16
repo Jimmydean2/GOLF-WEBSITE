@@ -104,6 +104,18 @@ export function emailKey(email: string): string {
 export function phoneKey(phone: string): string {
   return phone.replace(/\D/g, "").slice(-10);
 }
+// The same child written two ways ("Émilie  Tremblay" / "emilie tremblay", "Jean-Luc" /
+// "Jean Luc") is the same child. Letters from any alphabet are kept; accents, case, spacing
+// and punctuation are ignored. Combined with the date of birth it identifies a child.
+export function childKey(fullName: string, dateOfBirth: string): string {
+  const name = fullName
+    .normalize("NFKD")
+    .replace(/\p{M}+/gu, "")
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, " ")
+    .trim();
+  return `${name}|${dateOfBirth.trim()}`;
+}
 
 const REFERENCE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // no 0/O or 1/I
 
@@ -206,7 +218,14 @@ export type ReserveResult =
     }
   | { ok: false; reason: "weeks_full"; fullWeekIds: string[] }
   | { ok: false; reason: "weeks_unavailable"; unavailableWeekIds: string[] }
-  | { ok: false; reason: "too_many_open" };
+  | { ok: false; reason: "too_many_open" }
+  // A child in this request already holds (or has paid for) a spot in one of these weeks under
+  // the same email or phone number. Nothing is written. `conflicts` uses the names exactly as
+  // the requester typed them; `openRegistrationIds` are the unpaid ones, whose payment
+  // instructions can be sent again to the address on file.
+  | { ok: false; reason: "already_registered"; conflicts: { childName: string; weekIds: string[] }[]; openRegistrationIds: string[] }
+  // The idempotency key belongs to a different family's reservation. No details are returned.
+  | { ok: false; reason: "idempotency_conflict" };
 
 // Reserves spots for every (child, week) combination in a single all-or-nothing
 // transaction: if any requested week can't fit every child in this submission, nothing
@@ -226,14 +245,23 @@ export async function reserveRegistration(input: ReserveRegistrationInput): Prom
   }
 }
 
-async function existingReservation(client: Queryable, idempotencyKey: string): Promise<ReserveResult | null> {
+// The fast path for a repeated submission (double-click, retry after a dropped connection):
+// the reservation already made for this key, or null. Reads only.
+export async function findExistingReservation(idempotencyKey: string, email: string): Promise<ReserveResult | null> {
+  return existingReservation(getPool(), idempotencyKey, email);
+}
+
+async function existingReservation(client: Queryable, idempotencyKey: string, email: string): Promise<ReserveResult | null> {
   const { rows } = await client.query(
-    `SELECT id, reference_code, total_price_cents, amount_due_cents, hold_expires_at, hold_ends_at_initial
+    `SELECT id, email, reference_code, total_price_cents, amount_due_cents, hold_expires_at, hold_ends_at_initial
        FROM registrations WHERE idempotency_key = $1`,
     [idempotencyKey]
   );
   if (rows.length === 0) return null;
   const row = rows[0];
+  // A retry of the same submission comes from the same family. If the key turns up with a
+  // different email, hand back nothing: the key is not theirs.
+  if (emailKey(row.email as string) !== emailKey(email)) return { ok: false, reason: "idempotency_conflict" };
   const settings = await getCampSettings(client);
   const holdExpiresAt = new Date(row.hold_ends_at_initial as string);
   return {
@@ -254,7 +282,16 @@ async function reserveOnce(input: ReserveRegistrationInput): Promise<ReserveResu
   try {
     await client.query("BEGIN");
 
-    const existing = await existingReservation(client, input.idempotencyKey);
+    // Submissions from the same family are handled one at a time: two at once cannot both
+    // slip under the limit, and a double-click is recognised as the repeat it is. The lock
+    // is taken on the email and on the phone number (always in that order, so two
+    // submissions can never wait on each other).
+    const eKey = emailKey(input.email);
+    const pKey = phoneKey(input.primaryPhone);
+    await client.query(`SELECT pg_advisory_xact_lock(hashtext($1))`, [`contact:${eKey}`]);
+    if (pKey) await client.query(`SELECT pg_advisory_xact_lock(hashtext($1))`, [`contactphone:${pKey}`]);
+
+    const existing = await existingReservation(client, input.idempotencyKey, input.email);
     if (existing) {
       await client.query("ROLLBACK");
       return existing;
@@ -262,11 +299,44 @@ async function reserveOnce(input: ReserveRegistrationInput): Promise<ReserveResu
 
     const settings = await getCampSettings(client);
 
-    // Limit how many unpaid reservations one family can hold at once. The advisory lock
-    // serialises submissions from the same family so two at once cannot both slip under it.
-    const eKey = emailKey(input.email);
-    const pKey = phoneKey(input.primaryPhone);
-    await client.query(`SELECT pg_advisory_xact_lock(hashtext($1))`, [`contact:${eKey}`]);
+    // A child can only be in one reservation per week. If any child in this request already
+    // holds that week for this family (unpaid, reported or paid), refuse instead of making
+    // a second one: the usual cause is a family registering again because the first
+    // confirmation email was slow, and the second reservation would hold double the places.
+    const sortedForClaims = [...new Set(input.weekIds)].sort();
+    const claims = await client.query(
+      `SELECT r.id AS registration_id, r.status, c.full_name, to_char(c.date_of_birth, 'YYYY-MM-DD') AS dob, s.week_id
+         FROM registrations r
+         JOIN children c ON c.registration_id = r.id
+         JOIN registration_spots s ON s.child_id = c.id AND s.status = 'active'
+        WHERE r.status IN ('pending_payment', 'payment_reported', 'paid')
+          AND s.week_id = ANY($3::text[])
+          AND (lower(r.email) = $1 OR ($2 <> '' AND right(regexp_replace(r.primary_phone, '\\D', '', 'g'), 10) = $2))`,
+      [eKey, pKey, sortedForClaims]
+    );
+    if (claims.rows.length > 0) {
+      const typedNames = new Map(input.children.map((c) => [childKey(c.fullName, c.dateOfBirth), c.fullName]));
+      const overlap = new Map<string, Set<string>>();
+      const openRegistrationIds = new Set<string>();
+      for (const row of claims.rows) {
+        const typed = typedNames.get(childKey(row.full_name as string, row.dob as string));
+        if (!typed) continue;
+        if (!overlap.has(typed)) overlap.set(typed, new Set());
+        overlap.get(typed)!.add(row.week_id as string);
+        if (row.status !== "paid") openRegistrationIds.add(row.registration_id as string);
+      }
+      if (overlap.size > 0) {
+        await client.query("ROLLBACK");
+        return {
+          ok: false,
+          reason: "already_registered",
+          conflicts: [...overlap.entries()].map(([childName, weeks]) => ({ childName, weekIds: [...weeks].sort() })),
+          openRegistrationIds: [...openRegistrationIds],
+        };
+      }
+    }
+
+    // Limit how many unpaid reservations one family can hold at once.
     const open = await client.query(
       `SELECT count(*)::int AS n FROM registrations
         WHERE status IN ('pending_payment', 'payment_reported')
@@ -375,7 +445,7 @@ async function reserveOnce(input: ReserveRegistrationInput): Promise<ReserveResu
     const fullWeek = capacityViolationWeek(err);
     if (fullWeek) return { ok: false, reason: "weeks_full", fullWeekIds: [fullWeek] };
     if (isUniqueViolation(err) && String((err as { constraint?: string }).constraint) !== "idx_registrations_reference") {
-      const retry = await existingReservation(pool, input.idempotencyKey);
+      const retry = await existingReservation(pool, input.idempotencyKey, input.email);
       if (retry) return retry;
     }
     throw err;
@@ -469,6 +539,15 @@ async function loadRegistration(client: Queryable, id: string): Promise<Registra
     weekIds: spotRes.rows.filter((s) => s.held).map((s) => s.week_id as string),
     allWeekIds: spotRes.rows.map((s) => s.week_id as string),
   };
+}
+
+// The time shown to the parent as "pay by": the end of the 12-hour hold, before the short
+// allowance for tapping "I've Sent My Payment". Fixed when the reservation is made.
+export async function getPayByAt(registrationId: string): Promise<string | null> {
+  const { rows } = await getPool().query(`SELECT hold_ends_at_initial FROM registrations WHERE id = $1`, [registrationId]);
+  if (rows.length === 0 || !rows[0].hold_ends_at_initial) return null;
+  const settings = await getCampSettings();
+  return new Date(new Date(rows[0].hold_ends_at_initial as string).getTime() - settings.reportAllowanceMinutes * 60_000).toISOString();
 }
 
 export async function getRegistrationById(id: string): Promise<RegistrationDetail | null> {
