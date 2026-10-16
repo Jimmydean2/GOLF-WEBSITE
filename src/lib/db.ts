@@ -27,8 +27,19 @@ export function getPool(): Pool {
     const max = Number(process.env.DB_POOL_MAX) || 1;
     pool = new Pool({
       connectionString,
-      ssl: isLocal ? false : { rejectUnauthorized: false },
+      // A remote database must prove its certificate. DB_SSL_INSECURE=true turns that off for
+      // a host whose certificate cannot be verified; scripts/preflight.mjs says which you have.
+      ssl: isLocal ? false : { rejectUnauthorized: process.env.DB_SSL_INSECURE !== "true" },
       max,
+      // A request must never hang waiting for the database: fail in seconds, not minutes.
+      connectionTimeoutMillis: 10_000,
+      statement_timeout: 25_000,
+      keepAlive: true,
+    });
+    // A pooled connection that the server drops while idle (Neon suspends idle databases)
+    // reports an error on the pool. Unhandled, that would stop the whole server process.
+    pool.on("error", (err) => {
+      console.error("An idle database connection was closed; the pool will open a new one:", err.message);
     });
   }
   return pool;

@@ -7,6 +7,8 @@ import { formatMontreal } from "@/lib/payment";
 import { formatCents } from "@/lib/pricing";
 import { juniorCamps } from "@/lib/content";
 import type { PaymentQueue, QueueItem } from "@/lib/campDb";
+import type { EmailHealth } from "@/lib/outbox";
+import type { SchedulerHealth } from "@/lib/scheduledCheck";
 
 // The administrators' review queue: the first thing on the admin page. Reported payments
 // come first, most overdue at the top, because a reported payment holds a spot until an
@@ -36,16 +38,88 @@ function Card({ item, tone, children }: { item: QueueItem; tone: "overdue" | "no
   );
 }
 
+
+type Health = { scheduler: SchedulerHealth; email: EmailHealth };
+
+const minutesText = (m: number | null) => (m === null ? "never" : m < 1 ? "just now" : m < 60 ? `${m} minute${m === 1 ? "" : "s"} ago` : `${Math.floor(m / 60)} hour${Math.floor(m / 60) === 1 ? "" : "s"} ago`);
+
+// Two questions an administrator should never have to guess: is the automatic check running
+// (the 12-hour releases, reminders, alerts and queued emails), and are emails getting out?
+// Quiet and small when all is well; loud when it is not.
+function StatusPanel({ health, onRunNow, running }: { health: Health; onRunNow: () => void; running: boolean }) {
+  const { scheduler, email } = health;
+  const schedulerProblem = scheduler.status === "stale" || scheduler.lastRunOk === false;
+  const emailProblem = email.failed > 0 || (email.waiting > 0 && (email.oldestWaitingMinutes ?? 0) >= 20) || (!email.configured && email.waiting > 0);
+  const nothingScheduled = scheduler.status !== "never" && scheduler.lastCronAt === null;
+  const tone = schedulerProblem || emailProblem ? "border-flag bg-flag/5" : "border-gold/30 bg-cream";
+  return (
+    <div className={`rounded-xl border p-4 text-sm ${tone}`} aria-label="System status">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="font-display text-base font-semibold text-forest">Automatic checks and email</p>
+        <button
+          type="button"
+          onClick={onRunNow}
+          disabled={running}
+          className="cursor-pointer rounded-full border border-forest px-4 py-1.5 text-xs font-semibold text-forest hover:bg-forest hover:text-cream disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          {running ? "Running…" : "Run the check now"}
+        </button>
+      </div>
+      <ul className="mt-2 space-y-1 text-ink-soft">
+        <li className={schedulerProblem ? "font-semibold text-flag" : ""}>
+          {scheduler.status === "never"
+            ? "The automatic check has not run yet. It runs when someone visits the site, or on a schedule once one is set up."
+            : scheduler.lastRunOk === false
+              ? `The last automatic check FAILED ${minutesText(scheduler.minutesSinceLastRun)}${scheduler.lastRunError ? `: ${scheduler.lastRunError}` : ""}.`
+              : scheduler.status === "stale"
+                ? `The automatic check last ran ${minutesText(scheduler.minutesSinceLastRun)}. Reminders, alerts and emails may be late until it runs again.`
+                : `Automatic check ran ${minutesText(scheduler.minutesSinceLastRun)}.`}
+          {nothingScheduled && scheduler.status === "ok" && " (Triggered by site visits: no scheduled job is set up yet.)"}
+        </li>
+        <li className={emailProblem ? "font-semibold text-flag" : ""}>
+          {!email.configured
+            ? `Email is not connected${email.waiting > 0 ? `, so ${email.waiting} email${email.waiting === 1 ? " is" : "s are"} waiting` : ""}.`
+            : email.waiting > 0
+              ? `${email.waiting} email${email.waiting === 1 ? "" : "s"} waiting to be sent${email.oldestWaitingMinutes ? ` (the oldest for ${email.oldestWaitingMinutes} minutes)` : ""}. They are retried automatically.`
+              : "No emails waiting."}{" "}
+          <span className="font-normal text-ink-soft">
+            {email.sentLast24h} sent in the last 24 hours (a Gmail account allows about 500 a day).
+          </span>
+        </li>
+      </ul>
+      {email.failedItems.length > 0 && (
+        <div className="mt-3 rounded-lg border border-flag bg-white p-3">
+          <p className="font-semibold text-flag">
+            {email.failed} email{email.failed === 1 ? "" : "s"} could not be delivered. Call the family:
+          </p>
+          <ul className="mt-1 space-y-1 text-ink-soft">
+            {email.failedItems.map((f) => (
+              <li key={`${f.reference}-${f.kind}`}>
+                <span className="font-display tracking-wider text-forest">{f.reference}</span> &middot; {f.parentName} &middot;{" "}
+                <a className="font-semibold text-forest hover:underline" href={`tel:${f.primaryPhone}`}>
+                  {f.primaryPhone}
+                </a>{" "}
+                &middot; {f.kind.replace(/_/g, " ")} &middot; <span className="text-xs">{f.error}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function AdminPaymentQueue() {
   const call = useAdminCall();
-  const [queue, setQueue] = useState<PaymentQueue | null>(null);
+  const [queue, setQueue] = useState<(PaymentQueue & { health?: Health }) | null>(null);
+  const [running, setRunning] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
 
   const load = useCallback(async () => {
     const result = await call("/api/admin/payment-queue", undefined, "GET");
     if (result.ok) {
-      setQueue(result.data as unknown as PaymentQueue);
+      setQueue(result.data as unknown as PaymentQueue & { health?: Health });
       setError("");
     } else {
       setError(String(result.data.error ?? "Could not load the review queue."));
@@ -68,6 +142,24 @@ export default function AdminPaymentQueue() {
     load();
   };
 
+  async function runNow() {
+    setRunning(true);
+    const result = await call("/api/admin/run-check", {});
+    setRunning(false);
+    if (result.ok && result.data.ok) {
+      const d = result.data as Record<string, unknown> & { emails?: Record<string, number> };
+      setNotice(
+        `Check done: ${d.released ?? 0} reservation(s) released, ${d.alertsSent ?? 0} alert(s) and ${d.emails?.sent ?? 0} email(s) sent` +
+          (d.skipped === "already_running" ? " (another check was already running)" : "") +
+          (d.noEmailConfigured ? ". Email is not connected, so nothing could be sent" : "") +
+          "."
+      );
+    } else {
+      setNotice(`The check failed: ${String(result.data.error ?? "unknown problem")}`);
+    }
+    load();
+  }
+
   if (error && !queue) {
     return (
       <p role="alert" className="mt-8 text-sm text-flag">
@@ -87,9 +179,11 @@ export default function AdminPaymentQueue() {
     reinstateCount: i.reinstateCount,
   });
   const max = queue.settings.extensionMaxCount;
+  const endingSoon = queue.awaiting.filter((i) => i.holdExpiresAt && new Date(i.holdExpiresAt).getTime() - new Date(queue.generatedAt).getTime() < 4 * 3_600_000);
 
   return (
     <section aria-label="Payment review queue" className="mt-8 space-y-6">
+      {queue.health && <StatusPanel health={queue.health} onRunNow={runNow} running={running} />}
       {queue.overdueCount > 0 && (
         <div role="alert" className="rounded-xl border-2 border-flag bg-flag/10 p-4">
           <p className="font-display text-base font-semibold text-flag">
@@ -135,10 +229,15 @@ export default function AdminPaymentQueue() {
         )}
       </div>
 
-      <details className="rounded-xl border border-gold/30 bg-cream p-4">
+      <details className="rounded-xl border border-gold/30 bg-cream p-4" open={endingSoon.length > 0}>
         <summary className="cursor-pointer font-display text-base font-semibold text-forest">
-          Awaiting payment — {queue.awaiting.length} (spot held {queue.settings.holdHours} hours)
+          Awaiting payment — {queue.awaiting.length} (spot held {queue.settings.holdHours} hours
+          {endingSoon.length > 0 ? `; ${endingSoon.length} ending within 4 hours` : ""})
         </summary>
+        <p className="mt-2 text-xs text-ink-soft">
+          Once a day, look in your bank for these references. If a deposit is there, click Confirm: the family does not need to tap
+          anything first. Families who have not reported get a reminder email a few hours before their hold ends.
+        </p>
         {queue.awaiting.length === 0 ? (
           <p className="mt-3 text-sm text-ink-soft">None.</p>
         ) : (

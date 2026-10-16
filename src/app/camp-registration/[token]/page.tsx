@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
+import { after } from "next/server";
+import { headers } from "next/headers";
 import Container from "@/components/Container";
 import ReportPaymentButton from "@/components/ReportPaymentButton";
 import { business, juniorCamps } from "@/lib/content";
@@ -8,6 +10,8 @@ import { getCampSettings, getRegistrationById } from "@/lib/campDb";
 import { etransferInstructionLines, formatMontreal } from "@/lib/payment";
 import { formatCents } from "@/lib/pricing";
 import { registrationIdFromToken } from "@/lib/registrationLink";
+import { maybeRunFromTraffic } from "@/lib/scheduledCheck";
+import { maskEmail, siteOriginFromHeaders } from "@/lib/siteUrl";
 
 // A parent's private reservation page. The link is the credential (there is no account):
 // it is never indexed, never sent as a referrer, and never cached. It can show this one
@@ -27,6 +31,11 @@ export default async function ReservationPage({ params }: { params: Promise<{ to
   if (!registrationId || !isDatabaseConfigured()) notFound();
   const registration = await getRegistrationById(registrationId);
   if (!registration) notFound();
+
+  // A visit is a chance to run the scheduled check if nothing has run for a few minutes (a
+  // fallback for when no scheduler is set up; at most one run every 5 minutes site-wide).
+  const origin = siteOriginFromHeaders(await headers());
+  if (origin) after(() => maybeRunFromTraffic(origin).catch((err) => console.error("Scheduled check from a visit failed:", err)));
 
   const amountText = `$${formatCents(registration.amountDueCents)}`;
   const childNames = registration.children.map((c) => c.fullName).join(", ");
@@ -67,6 +76,14 @@ export default async function ReservationPage({ params }: { params: Promise<{ to
                   Your spot is held until <strong className="text-ink">{formatMontreal(payBy)}</strong> (Montreal time).
                 </p>
               )}
+              <p className="mt-2 text-xs text-ink-soft">
+                We&apos;ve also emailed these instructions and this page&apos;s private link to{" "}
+                <strong className="text-ink">{maskEmail(registration.email)}</strong>. Not the right address? Call{" "}
+                <a href={business.phoneHref} className="font-semibold text-forest hover:underline">
+                  {business.phone}
+                </a>
+                .
+              </p>
               <div className="mt-6">
                 <ReportPaymentButton token={token} />
               </div>

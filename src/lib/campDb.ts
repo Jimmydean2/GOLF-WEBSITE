@@ -280,6 +280,15 @@ async function existingReservation(client: Queryable, idempotencyKey: string, em
 async function reserveOnce(input: ReserveRegistrationInput): Promise<ReserveResult> {
   const pool = getPool();
   const client = await pool.connect();
+  // The connection goes back to the pool BEFORE any fallback query below: with a pool of one
+  // (the production setting) a query made while still holding it would wait for itself forever.
+  let released = false;
+  const release = () => {
+    if (!released) {
+      released = true;
+      client.release();
+    }
+  };
   try {
     await client.query("BEGIN");
 
@@ -446,6 +455,7 @@ async function reserveOnce(input: ReserveRegistrationInput): Promise<ReserveResu
     };
   } catch (err) {
     await client.query("ROLLBACK").catch(() => {});
+    release();
     // Defence in depth: the week locks above should make this unreachable, but if the
     // database ever refuses a spot as over capacity, answer "full" instead of failing.
     const fullWeek = capacityViolationWeek(err);
@@ -456,7 +466,7 @@ async function reserveOnce(input: ReserveRegistrationInput): Promise<ReserveResu
     }
     throw err;
   } finally {
-    client.release();
+    release();
   }
 }
 

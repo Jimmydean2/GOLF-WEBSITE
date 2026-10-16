@@ -138,13 +138,16 @@ export async function runScheduledCheck(opts: ScheduledCheckOptions): Promise<Sc
 
 // The fallback for when no scheduler is running: any visit that calls this starts a check, but
 // only if none has started in the last five minutes. Many visitors at once start one.
-export async function maybeRunFromTraffic(origin: string, opts: Omit<ScheduledCheckOptions, "source" | "origin"> = {}): Promise<ScheduledCheckSummary | null> {
+export async function maybeRunFromTraffic(
+  origin: string,
+  opts: Omit<ScheduledCheckOptions, "source" | "origin"> & { source?: Exclude<RunSource, "cron"> } = {}
+): Promise<ScheduledCheckSummary | null> {
   const recent = await getPool().query(
     `SELECT 1 FROM job_runs WHERE started_at > now() - make_interval(mins => $1) LIMIT 1`,
     [TRAFFIC_MIN_GAP_MINUTES]
   );
   if ((recent.rowCount ?? 0) > 0) return null;
-  const summary = await runScheduledCheck({ ...opts, source: "traffic", origin });
+  const summary = await runScheduledCheck({ ...opts, source: opts.source ?? "traffic", origin });
   return summary.skipped ? null : summary;
 }
 

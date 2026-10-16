@@ -1,10 +1,15 @@
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
 import { requireAdmin } from "@/lib/adminAuth";
 import { isDatabaseConfigured } from "@/lib/db";
 import { getPaymentQueue } from "@/lib/campDb";
+import { getEmailHealth } from "@/lib/outbox";
+import { getSchedulerHealth, maybeRunFromTraffic } from "@/lib/scheduledCheck";
+import { siteOrigin } from "@/lib/siteUrl";
 
 // The administrators' review queue: reported payments (most overdue first), unreported
-// holds, and recent releases. Reading it also releases any 12-hour hold that has ended.
+// holds, and recent releases, plus whether the automatic check is running and whether emails
+// are getting out. Reading it also releases any 12-hour hold that has ended, and if the
+// automatic check has gone quiet, opening the queue starts one.
 export async function GET(request: Request) {
   const guard = await requireAdmin(request);
   if (!guard.ok) return guard.response;
@@ -12,7 +17,12 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Registrations aren't connected yet." }, { status: 503 });
   }
   try {
-    return NextResponse.json(await getPaymentQueue(), { headers: { "Cache-Control": "no-store" } });
+    const [queue, scheduler, email] = await Promise.all([getPaymentQueue(), getSchedulerHealth(), getEmailHealth()]);
+    if (scheduler.status !== "ok") {
+      const origin = siteOrigin(request.url);
+      after(() => maybeRunFromTraffic(origin, { source: "manual" }).catch((err) => console.error("Scheduled check from the dashboard failed:", err)));
+    }
+    return NextResponse.json({ ...queue, health: { scheduler, email } }, { headers: { "Cache-Control": "no-store" } });
   } catch (err) {
     console.error("Payment queue read failed:", err);
     return NextResponse.json({ error: "Could not load the review queue." }, { status: 502 });

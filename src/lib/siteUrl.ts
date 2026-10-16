@@ -14,3 +14,21 @@ export function siteOrigin(requestUrl?: string): string {
     return "";
   }
 }
+
+// The same, for a server component, which has request headers instead of a request.
+export function siteOriginFromHeaders(headers: { get(name: string): string | null }): string {
+  const configured = process.env.SITE_URL?.trim().replace(/\/+$/, "");
+  if (configured) return configured;
+  const host = headers.get("x-forwarded-host") ?? headers.get("host");
+  if (!host) return "";
+  const proto = headers.get("x-forwarded-proto") ?? (host.startsWith("localhost") ? "http" : "https");
+  return `${proto.split(",")[0]}://${host}`;
+}
+
+// "pat.parent@gmail.com" -> "p***@gmail.com": enough for a parent to spot a typo, not enough
+// to be of use to anyone else.
+export function maskEmail(email: string): string {
+  const at = email.lastIndexOf("@");
+  if (at < 1) return "your email address";
+  return `${email[0]}***${email.slice(at)}`;
+}
