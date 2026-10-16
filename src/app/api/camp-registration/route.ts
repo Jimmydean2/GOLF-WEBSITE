@@ -164,11 +164,11 @@ export async function POST(request: Request) {
       try {
         const registration = await getRegistrationById(result.registrationId);
         if (registration) {
-          const confirmUrl = new URL("/api/camp-registration/confirm", request.url);
-          confirmUrl.searchParams.set("id", result.registrationId);
-          confirmUrl.searchParams.set("token", result.confirmToken);
+          // The email links only to the (login-protected) dashboard — never to
+          // anything that changes a payment status.
+          const dashboardUrl = new URL("/admin/camp-rosters", request.url);
 
-          const { subject, html, text } = buildCoachNotificationEmail(registration, confirmUrl.toString());
+          const { subject, html, text } = buildCoachNotificationEmail(registration, dashboardUrl.toString());
           await sendEmail({ to: business.email, subject, html, text });
         }
       } catch (err) {

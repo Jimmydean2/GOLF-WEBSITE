@@ -77,9 +77,13 @@ function priceBreakdownRows(subtotalCents: number): [string, string][] {
   ];
 }
 
+// `dashboardUrl` is the owner's admin page. The email deliberately contains no
+// link that changes a payment status: opening an email link (or a mail
+// scanner prefetching it) must never confirm a registration. Payment is
+// confirmed only from the logged-in dashboard, after seeing the deposit.
 export function buildCoachNotificationEmail(
   registration: RegistrationDetail,
-  confirmUrl: string
+  dashboardUrl: string
 ): { subject: string; html: string; text: string } {
   const weekLabels = registration.weekIds.map(weekLabel);
   const weekCount = weekLabels.length;
@@ -127,7 +131,7 @@ export function buildCoachNotificationEmail(
   const html = emailShell(`
     <p style="margin:0 0 4px; font-family:Georgia,'Times New Roman',serif; font-size:20px; font-weight:bold; color:${FOREST};">New Junior Camp registration</p>
     <p style="margin:0 0 20px; font-size:12px; color:${INK_SOFT};">Confirmation #${confirmationNumber(registration.id)}</p>
-    <p style="margin:0 0 20px; font-size:14px; color:${INK_SOFT}; line-height:1.6;">A new registration came in for <strong>${weeksDisplay}</strong> (${registration.children.length} child${registration.children.length === 1 ? "" : "ren"}). Review the details below, and once you've received the e-transfer for the full amount, click the button to confirm ${weekCount === 1 ? "the spot" : "all spots"} and automatically send the parent their full confirmation email.</p>
+    <p style="margin:0 0 20px; font-size:14px; color:${INK_SOFT}; line-height:1.6;">A new registration came in for <strong>${weeksDisplay}</strong> (${registration.children.length} child${registration.children.length === 1 ? "" : "ren"}). Review the details below. Once you can see the e-transfer for the full amount in your bank account, open the dashboard, find this registration, and confirm payment — that confirms ${weekCount === 1 ? "the spot" : "all spots"} and sends the parent their full confirmation email.</p>
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:16px;">
       ${parentRowsHtml}
       ${childRows}
@@ -138,11 +142,11 @@ export function buildCoachNotificationEmail(
     <table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 auto;">
       <tr>
         <td style="border-radius:999px; background:${GOLD};">
-          <a href="${confirmUrl}" style="display:inline-block; padding:14px 28px; font-size:14px; font-weight:bold; color:#1b1b16; text-decoration:none;">Mark as Paid &amp; Send Confirmation</a>
+          <a href="${escapeHtml(dashboardUrl)}" style="display:inline-block; padding:14px 28px; font-size:14px; font-weight:bold; color:#1b1b16; text-decoration:none;">Open the admin dashboard</a>
         </td>
       </tr>
     </table>
-    <p style="margin:16px 0 0; font-size:12px; color:${INK_SOFT}; text-align:center;">Only click this once you've confirmed payment was received in full.</p>
+    <p style="margin:16px 0 0; font-size:12px; color:${INK_SOFT}; text-align:center;">Confirm payment only once the full amount is showing in your bank account.</p>
   `);
 
   const text = `New Junior Camp registration — ${weeksDisplay}
@@ -161,8 +165,8 @@ ${priceBreakdownRows(registration.totalPriceCents)
   .map(([label, value]) => `${label}: ${value}`)
   .join("\n")}
 
-Once payment is received, confirm it here:
-${confirmUrl}`;
+Once you can see the deposit in your bank account, confirm payment from your admin dashboard (login required):
+${dashboardUrl}`;
 
   return { subject, html, text };
 }

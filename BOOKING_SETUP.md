@@ -85,9 +85,9 @@ left" counter on the Junior Camps page.
    (A parent can register one child for several weeks at once — the "Weeks"
    column lists all of them together, e.g. `jul06,jul13`, rather than one
    row per week. The last four columns are filled in automatically by the
-   site — you don't need to touch them. "Paid" flips to `Yes` the moment
-   you click **Mark as Paid** in the notification email described in Step
-   4 below, which confirms every week in that registration at once.)
+   site — you don't need to touch them. The real payment status lives in
+   the camp database and your admin dashboard (Step 4 below), which is
+   where you confirm a payment; the sheet is only a reporting copy.)
 5. Click **Share** (top right) and share the sheet with the same
    `client_email` address from Step 1, giving it **Editor** access.
 6. Copy the spreadsheet's ID from its URL — it's the long string between
@@ -99,12 +99,16 @@ left" counter on the Junior Camps page.
 ## Step 4: Connect email for camp payment confirmations (~3 minutes)
 
 This is what makes camp registration "automatic": the moment a parent
-registers, you get an email with their details and a **Mark as Paid**
-button. You click it once you've received their e-transfer — that single
-click instantly emails the parent a full confirmation with their
-confirmed dates, drop-off/pick-up times, what to bring, and safety info.
-Nothing changes about how you actually get paid — parents still e-transfer
-you directly, no processing fees, no new payment account.
+registers, you get an email with their details and an **Open the admin
+dashboard** button. Once you can see their e-transfer in your bank account,
+open the dashboard, find the registration, and click **Confirm payment
+received** — that confirms every week in the registration and emails the
+parent a full confirmation with their confirmed dates, drop-off/pick-up
+times, what to bring, and safety info. The email itself never confirms
+anything (clicking or previewing an email can't change a payment), and only
+you, logged in, can confirm. Nothing changes about how you actually get paid
+— parents still e-transfer you directly, no processing fees, no new payment
+account.
 
 This uses your own Gmail account to send the emails, via something called
 an "App Password" (a special password just for this website — it doesn't
@@ -163,8 +167,9 @@ clinics, the rest of the pages) works fine either way.
 
 Send me that connection string along with the other items below, and
 I'll both add it to the hosting environment and run the one-time setup
-that creates the camp registration tables and the 10 weeks' worth of
-seed data — nothing further for you to do.
+(`npm run db:migrate`) that creates the camp registration tables, the 10
+weeks' worth of seed data, and the database-level capacity and payment
+safety rules (`003_capacity_integrity.sql`) — nothing further for you to do.
 
 ---
 
@@ -200,10 +205,14 @@ Once those are set:
   updates live as they add or remove weeks.
 - Every booking, sign-up, or registration appends a row to your sheet — no
   further setup needed.
-- Every camp registration also emails you a **Mark as Paid** link; clicking
-  it once the e-transfer is in automatically emails the parent their full
-  confirmation (dates, drop-off/pick-up times, what to bring, safety info).
-  Clicking it a second time is harmless — it won't send a duplicate email.
+- Every camp registration also emails you a link to your admin dashboard;
+  once the e-transfer is showing in your bank account, **Confirm payment
+  received** there automatically emails the parent their full confirmation
+  (dates, drop-off/pick-up times, what to bring, safety info). Confirming a
+  second time is harmless — it won't send a duplicate email. If a
+  registration was released and the family turns out to have paid, the same
+  button restores their spots — but only if the week still has room; if it
+  doesn't, nothing changes and the dashboard tells you why.
 - **yoursite.com/admin/camp-rosters** (behind your admin password) lets
   you download a printable roster workbook any time, one sheet per camp
   week, auto-filled with every current registration — always up to date,

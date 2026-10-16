@@ -222,7 +222,7 @@ function buildCoverSheet(wb: ExcelJS.Workbook, weekRosters: WeekRoster[]) {
     ],
     [
       "How to use a week's tab",
-      "Each row is one camper, already filled in from the registration form where one exists: child's name, age, parent/guardian, both phone numbers, emergency contact, and allergy/medical notes. The “Paid” column shows Y once you've clicked “Mark as Paid” in that registration's notification email. Add any walk-in or phone/email sign-ups in the blank rows.",
+      "Each row is one camper, already filled in from the registration form where one exists: child's name, age, parent/guardian, both phone numbers, emergency contact, and allergy/medical notes. The “Paid” column shows Y once you've confirmed that registration's payment from the admin dashboard, after seeing the deposit in your bank account. Add any walk-in or phone/email sign-ups in the blank rows.",
     ],
     [
       "Printing",

@@ -22,6 +22,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
   try {
     const result = await cancelRegistration(id, reason);
+    if (!result.ok) {
+      return NextResponse.json({ error: "Registration not found." }, { status: 404 });
+    }
     return NextResponse.json({ success: true, releasedWeekIds: result.releasedWeekIds });
   } catch (err) {
     console.error("Admin cancel registration failed:", err);

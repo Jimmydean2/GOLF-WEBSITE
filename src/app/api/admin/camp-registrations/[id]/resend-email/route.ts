@@ -46,10 +46,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       const { subject, html, text } = buildParentConfirmationEmail(registration);
       await sendEmail({ to: registration.email, subject, html, text });
     } else {
-      const confirmUrl = new URL("/api/camp-registration/confirm", request.url);
-      confirmUrl.searchParams.set("id", registration.id);
-      confirmUrl.searchParams.set("token", registration.confirmToken);
-      const { subject, html, text } = buildCoachNotificationEmail(registration, confirmUrl.toString());
+      const dashboardUrl = new URL("/admin/camp-rosters", request.url);
+      const { subject, html, text } = buildCoachNotificationEmail(registration, dashboardUrl.toString());
       await sendEmail({ to: business.email, subject, html, text });
     }
 
