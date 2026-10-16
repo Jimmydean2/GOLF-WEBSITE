@@ -39,7 +39,7 @@ const { pool, check, invariants } = h;
 let seed = 20260701;
 const rand = () => { seed = (seed + 0x6d2b79f5) | 0; let t = Math.imul(seed ^ (seed >>> 15), 1 | seed); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
 const pick = (items, weights) => { let r = rand() * weights.reduce((a, b) => a + b, 0); for (let i = 0; i < items.length; i++) { r -= weights[i]; if (r < 0) return items[i]; } return items.at(-1); };
-const WEEKS = ["jun22", "jun29", "jul06", "jul13", "jul20", "jul27", "aug03", "aug10", "aug17", "aug24"];
+const WEEKS = ["2027-06-21", "2027-06-28", "2027-07-05", "2027-07-12", "2027-07-19", "2027-07-26", "2027-08-02", "2027-08-09", "2027-08-16", "2027-08-23"];
 const WEEK_POPULARITY = [3, 4, 9, 10, 9, 7, 6, 5, 3, 2];
 
 const BEHAVIOURS = [

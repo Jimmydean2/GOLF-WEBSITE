@@ -17,7 +17,7 @@ import { getGoogleAuth, isGoogleServiceAccountConfigured } from "./googleAuth";
 //   Emergency Contact Relationship | Emergency Contact Phone | Weeks | Code of Conduct Accepted |
 //   Consent Accepted | Registration ID | Paid | Paid At | Reference
 //
-// "Weeks" holds one or more week IDs separated by commas (e.g. "jul06,jul13").
+// "Weeks" holds one or more week IDs separated by commas (e.g. "2027-07-05,2027-07-12").
 // One row is appended per child (a family registering 3 kids for a week
 // produces 3 rows, all sharing the same Registration ID) — matching how
 // the roster and "each child counts as one spot" model work in Postgres.

@@ -5,16 +5,29 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { juniorCamps, locations } from "@/lib/content";
+import { formatMontreal } from "@/lib/payment";
 
 const SEEN_KEY = "jdg-camp-promo-seen";
 
-export default function JuniorCampsPromo() {
+type PromoProps = {
+  /** The season year, e.g. 2027. */
+  year: number;
+  /** False while the calendar is a draft: the advert stays hidden. */
+  show: boolean;
+  /** When registration opens (ISO), or null if it is open as soon as the site is live. */
+  opensAt: string | null;
+};
+
+export default function JuniorCampsPromo({ year, show, opensAt }: PromoProps) {
   const pathname = usePathname();
   const [visible, setVisible] = useState(false);
+  // Worked out in the browser, when the advert appears, so the wording follows the real clock.
+  const [opensLater, setOpensLater] = useState(false);
 
   useEffect(() => {
     // Not on the registration page itself, and never on the administrators' screens or a
     // parent's private payment page: a pop-up advert has no place beside a payment button.
+    if (!show) return;
     if (pathname === "/junior-camps" || pathname?.startsWith("/admin") || pathname?.startsWith("/camp-registration")) return;
 
     let alreadySeen = false;
@@ -26,6 +39,7 @@ export default function JuniorCampsPromo() {
     if (alreadySeen) return;
 
     const timer = setTimeout(() => {
+      setOpensLater(opensAt !== null && Date.now() < Date.parse(opensAt));
       setVisible(true);
       try {
         sessionStorage.setItem(SEEN_KEY, "1");
@@ -36,15 +50,17 @@ export default function JuniorCampsPromo() {
     }, 1200);
 
     return () => clearTimeout(timer);
-  }, [pathname]);
+  }, [pathname, show, opensAt]);
 
   if (!visible) return null;
+
+  const opensText = opensAt ? formatMontreal(opensAt) : "";
 
   return (
     <div
       className="fixed inset-x-0 bottom-0 z-50 sm:inset-x-auto sm:bottom-6 sm:right-6 sm:w-72"
       role="complementary"
-      aria-label="2026 Junior Camps promotion"
+      aria-label={`${year} Junior Camps promotion`}
     >
       {/* Mobile: a slim bar, not a tall card — a full-height card here would
           sit over whatever form field the shopper scrolls to next, since
@@ -62,7 +78,7 @@ export default function JuniorCampsPromo() {
         </div>
         <div className="min-w-0 flex-1">
           <p className="truncate font-display text-sm font-semibold text-cream">
-            2026 Junior Camps &mdash; Registration is Open
+            {year} Junior Camps &mdash; {opensLater ? `Registration opens ${opensText}` : "Registration is Open"}
           </p>
           <Link
             href="/junior-camps"
@@ -105,16 +121,26 @@ export default function JuniorCampsPromo() {
           />
           <div className="absolute inset-x-0 top-0 bg-forest-dark/90 py-1.5 text-center">
             <p className="font-display text-[0.65rem] font-semibold uppercase tracking-[0.15em] text-cream">
-              2026 Junior Golf Camps
+              {year} Junior Golf Camps
             </p>
           </div>
         </div>
 
         <div className="p-5 text-center">
           <h2 className="font-display text-xl font-bold uppercase leading-tight text-cream">
-            Registration
-            <br />
-            is Open
+            {opensLater ? (
+              <>
+                Registration
+                <br />
+                opens {opensText}
+              </>
+            ) : (
+              <>
+                Registration
+                <br />
+                is Open
+              </>
+            )}
           </h2>
           <p className="mt-3 text-xs text-cream/85">
             A full day at {locations[juniorCamps.venue].name} &mdash; limited to{" "}

@@ -41,6 +41,12 @@ for (const name of [
   delete process.env[name];
 }
 
+// The camp calendar is a proposal until the owner confirms it, and an unconfirmed calendar keeps
+// registration closed (src/lib/registrationWindow.ts). Tests exercise registration, so they run
+// as a rehearsal site. The season suite tests the closed states explicitly.
+process.env.SEASON_PREVIEW = "true";
+delete process.env.REGISTRATION_OPENS_AT;
+
 export async function createTestDatabase({ migrationsUpTo } = {}) {
   const adminUrl = process.env.TEST_ADMIN_DATABASE_URL || process.env.DATABASE_URL;
   if (!adminUrl) throw new Error("DATABASE_URL is not set (it must point at a local Postgres).");

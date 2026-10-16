@@ -4,6 +4,8 @@ import { FormEvent, useEffect, useId, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { business, juniorCamps, locations, type CampWeekId } from "@/lib/content";
 import { calculateTotal, formatCents } from "@/lib/pricing";
+import { formatMontreal } from "@/lib/payment";
+import type { RegistrationWindow } from "@/lib/registrationWindow";
 
 const CAMP_WEEK_IDS = new Set(juniorCamps.weeks.map((week) => week.id));
 
@@ -14,6 +16,9 @@ type CapacityState = {
   loading: boolean;
   configured: boolean;
   weeks: Partial<Record<CampWeekId, WeekInfo>>;
+  // Open, not yet announced, or opening at a set moment — the same answer the endpoint enforces.
+  registration: RegistrationWindow | null;
+  serverNow: string | null;
 };
 
 type ChildEntry = { key: string; fullName: string; dateOfBirth: string; age: string; healthInfo: string };
@@ -38,7 +43,10 @@ export default function CampRegistrationForm() {
     loading: true,
     configured: false,
     weeks: {},
+    registration: null,
+    serverNow: null,
   });
+  const [reloadTick, setReloadTick] = useState(0);
 
   // A week picked via URL (from the overview tiles) seeds the picker; the
   // shopper can then add or remove weeks freely — one form, any number of
@@ -106,17 +114,49 @@ export default function CampRegistrationForm() {
           loading: false,
           configured: Boolean(data.configured),
           weeks: data.weeks ?? {},
+          registration: data.registration ?? null,
+          serverNow: typeof data.serverNow === "string" ? data.serverNow : null,
         });
       })
       .catch(() => {
         if (cancelled) return;
-        setCapacity({ loading: false, configured: false, weeks: {} });
+        setCapacity({ loading: false, configured: false, weeks: {}, registration: null, serverNow: null });
       });
 
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [reloadTick]);
+
+  // When registration is about to open, ask again at that moment, so a family who left the page
+  // open does not have to refresh. The wait is measured on the server's clock (a wrong clock on
+  // the visitor's phone changes nothing) with a few seconds of random spread, so a crowd of open
+  // tabs does not ask in the same instant.
+  const opensAt = capacity.registration?.state === "opens_later" ? capacity.registration.opensAt : null;
+  const serverNow = capacity.serverNow;
+  useEffect(() => {
+    if (!opensAt || !serverNow) return;
+    const wait = Math.max(0, Date.parse(opensAt) - Date.parse(serverNow)) + Math.floor(Math.random() * 4000);
+    const timer = setTimeout(() => setReloadTick((n) => n + 1), Math.min(wait, 2_000_000_000));
+    return () => clearTimeout(timer);
+  }, [opensAt, serverNow]);
+
+  if (!capacity.loading && capacity.registration?.state === "not_announced") {
+    return (
+      <div className="rounded-2xl border border-gold/30 bg-cream p-8 text-center">
+        <p className="font-display text-lg font-semibold text-forest">{juniorCamps.year} camp registration isn&apos;t open yet.</p>
+        <p className="mt-2 text-ink-soft">The {juniorCamps.year} camp dates will be announced soon. Questions? Call or email us:</p>
+        <div className="mt-4 flex flex-col items-center gap-1">
+          <a href={business.phoneHref} className="font-semibold text-forest hover:underline">
+            {business.phone}
+          </a>
+          <a href={`mailto:${business.email}`} className="font-semibold text-forest hover:underline">
+            {business.email}
+          </a>
+        </div>
+      </div>
+    );
+  }
 
   if (!capacity.loading && !capacity.configured) {
     return (
@@ -238,6 +278,12 @@ export default function CampRegistrationForm() {
 
   return (
     <form onSubmit={handleSubmit} className="space-y-8 rounded-2xl border border-gold/30 bg-cream p-8">
+      {opensAt && (
+        <div role="status" className="rounded-xl border border-gold/40 bg-white p-4 text-sm text-ink-soft">
+          <p className="font-semibold text-forest">Registration opens {formatMontreal(opensAt)} (Montreal time).</p>
+          <p className="mt-1">You can look over the form now. It can&apos;t be sent until then, and this page will unlock by itself.</p>
+        </div>
+      )}
       <div>
         <h3 className="font-display text-lg font-semibold text-forest">
           Section 1 &mdash; Parent/Guardian Information
@@ -379,6 +425,9 @@ export default function CampRegistrationForm() {
                       ? "Full"
                       : `${info.remaining} of ${info.max} spots left`}
                 </span>
+                {week.note && (
+                  <span className={`mt-1 block text-xs ${selected ? "text-cream/80" : "text-ink-soft"}`}>{week.note.en}</span>
+                )}
                 {!capacity.loading && info && !full && info.remaining <= 5 && (
                   <span
                     className={`mt-1 block text-xs font-semibold ${
@@ -482,10 +531,10 @@ export default function CampRegistrationForm() {
 
       <button
         type="submit"
-        disabled={status === "sending"}
+        disabled={status === "sending" || opensAt !== null}
         className="w-full cursor-pointer rounded-full bg-forest px-6 py-3 text-sm font-semibold text-cream transition-colors hover:bg-forest-dark disabled:cursor-not-allowed disabled:opacity-60"
       >
-        {status === "sending" ? "Sending…" : "Register Now"}
+        {status === "sending" ? "Sending…" : opensAt ? "Registration is not open yet" : "Register Now"}
       </button>
 
       {status === "error" && (

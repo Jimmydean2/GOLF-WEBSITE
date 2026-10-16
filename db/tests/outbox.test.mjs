@@ -3,6 +3,7 @@
 // A fake mailer stands in for Gmail; the SMTP-level behaviour is covered by the rehearsal suite.
 
 import { createTestDatabase } from "./helpers/testdb.mjs";
+import { labelForWeekId } from "../../src/lib/season.ts";
 
 process.env.DB_POOL_MAX ||= "20";
 process.env.REGISTRATION_LINK_SECRET = "test-only-registration-link-secret-0123456789";
@@ -58,9 +59,9 @@ console.log("=== 1. A reservation and its emails are one decision ===");
   const same = await campDb.reserveRegistration({ ...input("x"), idempotencyKey: (await pool.query(`SELECT idempotency_key FROM registrations WHERE id=$1`, [id])).rows[0].idempotency_key, email: "mom@example.test" });
   check("a repeated submission queues nothing more", same.ok && same.alreadyExisted && (await rows()).length === before && replay.ok);
 
-  await h.fill("jul13", 30, "fullweek");
+  await h.fill("2027-07-12", 30, "fullweek");
   const beforeRefusals = (await rows()).length;
-  const full = await campDb.reserveRegistration(input("nofit", { weekIds: ["jul13"] }));
+  const full = await campDb.reserveRegistration(input("nofit", { weekIds: ["2027-07-12"] }));
   check("a refused reservation (week full) queues nothing", !full.ok && (await rows()).length === beforeRefusals);
 
   // A reservation that fails halfway rolls its emails back with it.
@@ -68,7 +69,7 @@ console.log("=== 1. A reservation and its emails are one decision ===");
   await pool.query(`CREATE TRIGGER test_boom BEFORE INSERT ON registration_spots FOR EACH ROW EXECUTE FUNCTION test_boom()`);
   const beforeBoom = (await rows()).length;
   let blew = false;
-  try { await campDb.reserveRegistration(input("boom", { weekIds: ["aug24"] })); } catch { blew = true; }
+  try { await campDb.reserveRegistration(input("boom", { weekIds: ["2027-08-23"] })); } catch { blew = true; }
   await pool.query(`DROP TRIGGER test_boom ON registration_spots`);
   check("a reservation that dies mid-way leaves no emails behind", blew && (await rows()).length === beforeBoom);
 }
@@ -88,15 +89,15 @@ console.log("\n=== 2. Delivery: the right email, to the right people, once ===")
   const coachMail = m.sent.find((x) => x.to === ADMINS.join(", "));
   check("the coach summary goes to every administrator address", Boolean(coachMail) && /new camp registration/i.test(coachMail.subject));
   check("two emails sent, none failed", summary.sent === 2 && summary.failed === 0 && summary.retried === 0, JSON.stringify(summary));
-  // Week ids sort alphabetically into the wrong order for a parent ("aug03" < "jul06" < "jun22").
-  const months = await reserveOk("months", { email: "months@example.test", weekIds: ["aug24", "jul06", "jun22", "aug03"] });
+  // Weeks given out of order (and spread over three months) must still be listed in calendar order.
+  const months = await reserveOk("months", { email: "months@example.test", weekIds: ["2027-08-23", "2027-07-05", "2027-06-21", "2027-08-02"] });
   const mMonths = mailer();
   await run(mMonths, { coachMode: "off" });
   const monthsMail = mMonths.sent.find((x) => x.to === "months@example.test");
-  const positions = ["June 22", "July 6", "August 3", "August 24"].map((label) => monthsMail.text.indexOf(label));
+  const positions = ["2027-06-21", "2027-07-05", "2027-08-02", "2027-08-23"].map((id) => monthsMail.text.indexOf(labelForWeekId(id)));
   check("weeks in three different months are listed in calendar order in the email (June, July, August)", positions.every((p, i) => p >= 0 && (i === 0 || p > positions[i - 1])), positions.join(","));
   const detail = await campDb.getRegistrationById(months);
-  check("and on the reservation page and everywhere else the registration is read", detail.weekIds.join() === "jun22,jul06,aug03,aug24" && detail.allWeekIds.join() === "jun22,jul06,aug03,aug24", detail.weekIds.join());
+  check("and on the reservation page and everywhere else the registration is read", detail.weekIds.join() === "2027-06-21,2027-07-05,2027-08-02,2027-08-23" && detail.allWeekIds.join() === "2027-06-21,2027-07-05,2027-08-02,2027-08-23", detail.weekIds.join());
   const again = await run(mailer());
   check("running again sends nothing (each email is sent once)", again.sent === 0);
   check("the rows are marked sent with a time", (await rows("registration_id = $1", [id])).every((r) => r.status === "sent" && r.sent_at));
@@ -123,7 +124,7 @@ console.log("\n=== 3. A struggling mail server: retry with growing delays, never
 
   // Three failures in a row: stop hammering a dead server.
   await reset();
-  for (let i = 0; i < 8; i++) await reserveOk(`dead${i}`, { email: `dead${i}@example.test`, weekIds: ["jul06"] });
+  for (let i = 0; i < 8; i++) await reserveOk(`dead${i}`, { email: `dead${i}@example.test`, weekIds: ["2027-07-05"] });
   const dead = mailer(() => TRANSIENT());
   const stopped = await run(dead, { coachMode: "off" });
   check("after 3 failures in a row a run gives up instead of waiting on a dead server 8 times", dead.calls === 3 && stopped.stoppedEarly !== null, `${dead.calls} calls`);
@@ -136,7 +137,7 @@ console.log("\n=== 4. A bad address is given up on at once; a full mailbox quota
 {
   await reset();
   const bad = await reserveOk("typo", { email: "typo@gmial.example" });
-  const good = await reserveOk("fine", { email: "fine@example.test", weekIds: ["jul13"] });
+  const good = await reserveOk("fine", { email: "fine@example.test", weekIds: ["2027-07-12"] });
   const m = mailer((message) => (message.to === "typo@gmial.example" ? smtpError(550, "550 5.1.1 <typo@gmial.example>: Recipient address rejected: User unknown") : null));
   const s = await run(m, { coachMode: "off" });
   const badRow = await rowFor("parent_instructions", bad);
@@ -166,9 +167,9 @@ console.log("\n=== 5. Sending an email that no longer makes sense is skipped ===
 {
   await reset();
   const released = await reserveOk("late1", { email: "late1@example.test" });
-  const paid = await reserveOk("late2", { email: "late2@example.test", weekIds: ["jul13"] });
-  const reported = await reserveOk("late3", { email: "late3@example.test", weekIds: ["jul20"] });
-  await reserveOk("late4", { email: "late4@example.test", weekIds: ["jul27"] });
+  const paid = await reserveOk("late2", { email: "late2@example.test", weekIds: ["2027-07-12"] });
+  const reported = await reserveOk("late3", { email: "late3@example.test", weekIds: ["2027-07-19"] });
+  await reserveOk("late4", { email: "late4@example.test", weekIds: ["2027-07-26"] });
   await campDb.cancelRegistration(released, "changed plans", { releaseReason: "owner_cancelled" });
   await confirmFor(paid);
   await campDb.reportPayment(reported);
@@ -187,7 +188,7 @@ console.log("\n=== 5. Sending an email that no longer makes sense is skipped ===
 console.log("\n=== 6. Many workers at once never send the same email twice ===");
 {
   await reset();
-  for (let i = 0; i < 12; i++) await reserveOk(`par${i}`, { email: `par${i}@example.test`, weekIds: ["jul06"] });
+  for (let i = 0; i < 12; i++) await reserveOk(`par${i}`, { email: `par${i}@example.test`, weekIds: ["2027-07-05"] });
   const seen = new Map();
   const wrapped = async (message) => { seen.set(message.to, (seen.get(message.to) ?? 0) + 1); await new Promise((r) => setTimeout(r, 15)); };
   await Promise.all(Array.from({ length: 6 }, () => processOutbox({ origin: ORIGIN, send: wrapped, adminEmails: ADMINS, coachMode: "off" })));
@@ -233,7 +234,7 @@ console.log("\n=== 8. The confirmation email is recorded with the payment ===");
   check("and goes out when the server recovers", ok2.sent.length === 1 && /confirmed/i.test(ok2.sent[0].subject) && ok2.sent[0].to === "conf@example.test");
 
   // Reinstating a released registration also confirms it.
-  const lateId = await reserveOk("latepay", { email: "latepay@example.test", weekIds: ["jul13"] });
+  const lateId = await reserveOk("latepay", { email: "latepay@example.test", weekIds: ["2027-07-12"] });
   await h.expireHold(lateId);
   await campDb.releaseExpiredReservations();
   const reinstated = await confirmFor(lateId);
@@ -244,10 +245,10 @@ console.log("\n=== 8. The confirmation email is recorded with the payment ===");
 console.log("\n=== 9. The reminder: one gentle nudge, only to families who still need it ===");
 {
   await reset();
-  const needs = await reserveOk("needs", { email: "needs@example.test", weekIds: ["jul06"] });
-  const reported = await reserveOk("repo", { email: "repo@example.test", weekIds: ["jul13"] });
-  const paid = await reserveOk("paid", { email: "paid@example.test", weekIds: ["jul20"] });
-  const released = await reserveOk("rel", { email: "rel@example.test", weekIds: ["jul27"] });
+  const needs = await reserveOk("needs", { email: "needs@example.test", weekIds: ["2027-07-05"] });
+  const reported = await reserveOk("repo", { email: "repo@example.test", weekIds: ["2027-07-12"] });
+  const paid = await reserveOk("paid", { email: "paid@example.test", weekIds: ["2027-07-19"] });
+  const released = await reserveOk("rel", { email: "rel@example.test", weekIds: ["2027-07-26"] });
   await campDb.reportPayment(reported);
   await confirmFor(paid);
   await campDb.cancelRegistration(released, "x", { releaseReason: "owner_cancelled" });
@@ -323,7 +324,7 @@ console.log("\n=== 11. The coach hears about new registrations without flooding 
   const SENTINEL_DOB = "2013-03-09";
   const makeMany = async (n) => {
     for (let i = 0; i < n; i++) {
-      await reserveOk(`c${i}`, { email: `c${i}@example.test`, weekIds: ["jul06"], children: [{ fullName: `Kid ${i}`, dateOfBirth: SENTINEL_DOB, age: "13", healthInfo: SENTINEL_HEALTH }] });
+      await reserveOk(`c${i}`, { email: `c${i}@example.test`, weekIds: ["2027-07-05"], children: [{ fullName: `Kid ${i}`, dateOfBirth: SENTINEL_DOB, age: "13", healthInfo: SENTINEL_HEALTH }] });
     }
   };
 
@@ -347,7 +348,7 @@ console.log("\n=== 11. The coach hears about new registrations without flooding 
   check("and carries no health details or birth dates", !digests[0].text.includes(SENTINEL_HEALTH) && !digests[0].html.includes(SENTINEL_HEALTH) && !digests[0].text.includes(SENTINEL_DOB));
   check("every one of the 30 coach rows is marked sent", (await rows("kind = 'coach_notice' AND status = 'sent'")).length === 30);
 
-  await reserveOk("after-digest", { email: "afterdigest@example.test", weekIds: ["jul13"] });
+  await reserveOk("after-digest", { email: "afterdigest@example.test", weekIds: ["2027-07-12"] });
   const mSoon = mailer();
   await run(mSoon, { coachMode: "digest", now: new Date(t0.getTime() + 20 * MIN), coachDigestMinutes: 60 });
   check("a registration 20 minutes later waits for the next summary (the parent's email still goes at once)",
@@ -385,11 +386,11 @@ console.log("\n=== 11. The coach hears about new registrations without flooding 
 console.log("\n=== 12. The mailbox's daily allowance is protected ===");
 {
   await reset();
-  for (let i = 0; i < 6; i++) await reserveOk(`bud${i}`, { email: `bud${i}@example.test`, weekIds: ["jul06"] });
+  for (let i = 0; i < 6; i++) await reserveOk(`bud${i}`, { email: `bud${i}@example.test`, weekIds: ["2027-07-05"] });
   const m = mailer();
   await run(m, { coachMode: "off", limit: 6, dailyBudget: 7 });
   check("six parent emails sent", m.sent.length === 6);
-  const newcomer = await reserveOk("bud-new", { email: "budnew@example.test", weekIds: ["jul13"] });
+  const newcomer = await reserveOk("bud-new", { email: "budnew@example.test", weekIds: ["2027-07-12"] });
   const t0 = new Date();
   const created = new Date((await pool.query(`SELECT created_at FROM registrations WHERE id=$1`, [newcomer])).rows[0].created_at).getTime();
   await enqueueDueReminders(new Date(created + 9.5 * HOUR));
@@ -422,9 +423,9 @@ console.log("\n=== 13. The dashboard's view of email health ===");
 console.log("\n=== 14. The release notice: the safety net for a family that paid but never tapped the button ===");
 {
   await reset();
-  const lapsed = await reserveOk("lapsed", { email: "lapsed@example.test", parentName: "Pat Parent", weekIds: ["jul06"] });
-  const adminReleased = await reserveOk("admin-rel", { email: "adminrel@example.test", weekIds: ["jul13"] });
-  const notReceived = await reserveOk("notrec", { email: "notrec@example.test", weekIds: ["jul20"] });
+  const lapsed = await reserveOk("lapsed", { email: "lapsed@example.test", parentName: "Pat Parent", weekIds: ["2027-07-05"] });
+  const adminReleased = await reserveOk("admin-rel", { email: "adminrel@example.test", weekIds: ["2027-07-12"] });
+  const notReceived = await reserveOk("notrec", { email: "notrec@example.test", weekIds: ["2027-07-19"] });
   await campDb.cancelRegistration(adminReleased, "family asked", { releaseReason: "owner_cancelled" });
   await campDb.reportPayment(notReceived);
   await campDb.cancelRegistration(notReceived, "nothing found", { releaseReason: "not_received" });
@@ -443,7 +444,7 @@ console.log("\n=== 14. The release notice: the safety net for a family that paid
 
   // Reinstated before the notice went out: the notice would now be wrong.
   await reset();
-  const quick = await reserveOk("quick", { email: "quick@example.test", weekIds: ["jul06"] });
+  const quick = await reserveOk("quick", { email: "quick@example.test", weekIds: ["2027-07-05"] });
   await h.expireHold(quick, 1);
   await campDb.releaseExpiredReservations();
   await confirmFor(quick);
@@ -454,7 +455,7 @@ console.log("\n=== 14. The release notice: the safety net for a family that paid
 
   // A mistyped address must not be bounced at again and again.
   await reset();
-  const typo = await reserveOk("typo2", { email: "nobody@gmial.example", weekIds: ["jul06"] });
+  const typo = await reserveOk("typo2", { email: "nobody@gmial.example", weekIds: ["2027-07-05"] });
   await h.expireHold(typo, 1);
   await campDb.releaseExpiredReservations();
   const bounce = mailer((message) => smtpError(550, `550 5.1.1 <${message.to}> User unknown`));
@@ -463,7 +464,7 @@ console.log("\n=== 14. The release notice: the safety net for a family that paid
 
   // Many families released at once: every one is told (not just the newest hundred).
   await reset();
-  const weeks = ["jun22", "jun29", "jul06", "jul13", "jul20", "jul27", "aug03", "aug10", "aug17", "aug24"];
+  const weeks = ["2027-06-21", "2027-06-28", "2027-07-05", "2027-07-12", "2027-07-19", "2027-07-26", "2027-08-02", "2027-08-09", "2027-08-16", "2027-08-23"];
   for (let i = 0; i < 130; i++) await reserveOk(`mass${i}`, { email: `mass${i}@example.test`, weekIds: [weeks[i % 10]] });
   await pool.query(`UPDATE registrations SET hold_expires_at = now() - interval '1 hour'`);
   await campDb.releaseExpiredReservations();
@@ -478,7 +479,7 @@ console.log("\n=== 14. The release notice: the safety net for a family that paid
 console.log("\n=== 15. Opening day: dozens of requests send at once, but only a few emails are in flight ===");
 {
   await reset();
-  const weeks = ["jun22", "jun29", "jul06", "jul13", "jul20", "jul27", "aug03", "aug10", "aug17", "aug24"];
+  const weeks = ["2027-06-21", "2027-06-28", "2027-07-05", "2027-07-12", "2027-07-19", "2027-07-26", "2027-08-02", "2027-08-09", "2027-08-16", "2027-08-23"];
   const ids = [];
   for (let i = 0; i < 40; i++) ids.push(await reserveOk(`wave${i}`, { email: `wave${i}@example.test`, weekIds: [weeks[i % 10]] }));
   let inFlight = 0;
@@ -499,7 +500,7 @@ console.log("\n=== 15. Opening day: dozens of requests send at once, but only a 
 
   // When the slots stay full, a worker gives up politely and leaves its email for the next run.
   await reset();
-  const lone = await reserveOk("lone", { email: "lone@example.test", weekIds: ["jul06"] });
+  const lone = await reserveOk("lone", { email: "lone@example.test", weekIds: ["2027-07-05"] });
   await pool.query(`UPDATE email_outbox SET status = 'sending', lease_until = now() + interval '1 minute' WHERE kind = 'coach_notice'`);
   const full = await processOutbox({ origin: ORIGIN, send: mailer().send, adminEmails: ADMINS, coachMode: "off", registrationId: lone, maxConcurrent: 1, timeBudgetMs: 1500 });
   check("with every slot busy it sends nothing yet and says why, leaving the email queued", full.sent === 0 && /most emails allowed at once/.test(full.stoppedEarly ?? "") && (await rowFor("parent_instructions", lone)).status === "pending");

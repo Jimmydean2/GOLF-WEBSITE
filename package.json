@@ -8,6 +8,8 @@
     "start": "next start",
     "lint": "eslint",
     "db:migrate": "for f in db/migrations/*.sql; do psql \"$DATABASE_URL\" -v ON_ERROR_STOP=1 -f \"$f\" || exit 1; done",
+    "season:write": "tsx scripts/season-write.mjs",
+    "preflight": "tsx scripts/preflight.mjs",
     "test:concurrency": "tsx db/tests/concurrency.test.mjs",
     "test:payment-integrity": "tsx db/tests/payment-integrity.test.mjs",
     "test:payment-policy": "tsx db/tests/payment-policy.test.mjs",
@@ -25,8 +27,9 @@
     "test:http-privacy": "tsx db/tests/http-privacy.test.mjs",
     "test:opening-day": "tsx db/tests/opening-day.test.mjs",
     "test:rehearsal-kit": "tsx db/tests/rehearsal-kit.test.mjs",
+    "test:season": "tsx db/tests/season.test.mjs",
     "test:mutations": "tsx db/tests/mutation-check.mjs",
-    "test": "npm run test:log-safety && npm run test:payment-integrity && npm run test:payment-policy && npm run test:admin-security && npm run test:alerts && npm run test:families && npm run test:registration-flow && npm run test:outbox && npm run test:scheduler && npm run test:no-auto-release && npm run test:pool-of-one && npm run test:smtp-stack && npm run test:concurrency && npm run test:xlsx-safety && npm run test:http-privacy && npm run test:opening-day && npm run test:rehearsal-kit"
+    "test": "npm run test:season && npm run test:log-safety && npm run test:payment-integrity && npm run test:payment-policy && npm run test:admin-security && npm run test:alerts && npm run test:families && npm run test:registration-flow && npm run test:outbox && npm run test:scheduler && npm run test:no-auto-release && npm run test:pool-of-one && npm run test:smtp-stack && npm run test:concurrency && npm run test:xlsx-safety && npm run test:http-privacy && npm run test:opening-day && npm run test:rehearsal-kit"
   },
   "dependencies": {
     "exceljs": "^4.4.0",

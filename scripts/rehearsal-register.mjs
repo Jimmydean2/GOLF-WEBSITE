@@ -23,7 +23,7 @@ const arg = (name, fallback = null) => {
 const baseUrl = String(arg("--base-url", "")).replace(/\/+$/, "");
 const emailBase = String(arg("--email-base", ""));
 const count = Math.min(Math.max(Number(arg("--count", 3)) || 3, 1), 10);
-const weeksArg = String(arg("--weeks", "jul06"));
+const weeksArg = String(arg("--weeks", "2027-07-05"));
 const confirmed = args.includes("--confirm-rehearsal");
 
 function stop(message) {

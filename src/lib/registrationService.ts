@@ -15,6 +15,9 @@ import { clientIp, rateLimit, rateLimitRefund, type RateLimitResult } from "./ra
 import { siteOrigin } from "./siteUrl";
 import { inCalendarOrder } from "./weeks";
 import { logError } from "./safeLog";
+import { registrationWindow } from "./registrationWindow";
+import { formatMontreal } from "./payment";
+import { season } from "./season";
 
 // Server-only. Everything the registration form's POST does, kept apart from the Next.js
 // route file so it can be exercised directly (and under load) without a web server.
@@ -199,6 +202,23 @@ export async function handleRegistrationRequest(request: Request, hooks: Registr
   if (!isRegistrationLinkConfigured()) {
     console.error("REGISTRATION_LINK_SECRET is missing or shorter than 16 characters: registration is switched off.");
     return json({ error: "Online registration isn't set up yet. Please call or email instead.", code: "unavailable" }, 503);
+  }
+
+  // Is registration open at all? A draft calendar, or an opening time still ahead, is refused
+  // here with the same answer the page shows (see registrationWindow.ts). Costs nothing.
+  const opening = registrationWindow(hooks.now ?? new Date());
+  if (opening.state !== "open") {
+    return json(
+      {
+        error:
+          opening.state === "opens_later"
+            ? `Registration opens ${formatMontreal(opening.opensAt)} (Montreal time). Please come back then.`
+            : `Registration for the ${season.year} camps has not opened yet. Please check back soon, or call ${business.phone}.`,
+        code: "registration_not_open",
+        ...(opening.state === "opens_later" ? { opensAt: opening.opensAt } : {}),
+      },
+      403
+    );
   }
 
   if (Number(request.headers.get("content-length") ?? 0) > REGISTRATION_LIMITS.maxBodyBytes) {

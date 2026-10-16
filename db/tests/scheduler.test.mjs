@@ -43,9 +43,9 @@ const createdAt = async (id) => new Date((await pool.query(`SELECT created_at FR
 console.log("=== 1. The 12-hour rule, on a clock ===");
 {
   await reset();
-  const ignored = await reserveOk("never-reported", { email: "never@example.test", weekIds: ["jul06"] });
-  const reported = await reserveOk("reported-long-ago", { email: "reported@example.test", weekIds: ["jul13"] });
-  const fresh = await reserveOk("fresh", { email: "fresh@example.test", weekIds: ["jul20"] });
+  const ignored = await reserveOk("never-reported", { email: "never@example.test", weekIds: ["2027-07-05"] });
+  const reported = await reserveOk("reported-long-ago", { email: "reported@example.test", weekIds: ["2027-07-12"] });
+  const fresh = await reserveOk("fresh", { email: "fresh@example.test", weekIds: ["2027-07-19"] });
   await campDb.reportPayment(reported);
   await expireHold(ignored, 1);
   // The reported one is 8 days overdue: far past every deadline.
@@ -67,8 +67,8 @@ console.log("=== 1. The 12-hour rule, on a clock ===");
 console.log("\n=== 2. One run does it all: reminder queued, then sent ===");
 {
   await reset();
-  const a = await reserveOk("rem-a", { email: "rem-a@example.test", weekIds: ["jul06"] });
-  const b = await reserveOk("rem-b", { email: "rem-b@example.test", weekIds: ["jul13"] });
+  const a = await reserveOk("rem-a", { email: "rem-a@example.test", weekIds: ["2027-07-05"] });
+  const b = await reserveOk("rem-b", { email: "rem-b@example.test", weekIds: ["2027-07-12"] });
   await pool.query(`DELETE FROM email_outbox WHERE kind <> 'parent_reminder'`);
   const t = new Date((await createdAt(a)) + 9.2 * HOUR);
   const m = mailer();
@@ -85,7 +85,7 @@ console.log("\n=== 3. Overlapping runs: one does the work, nothing is done twice
 {
   await reset();
   for (let i = 0; i < 6; i++) {
-    const id = await reserveOk(`par${i}`, { email: `par${i}@example.test`, weekIds: ["jul06"] });
+    const id = await reserveOk(`par${i}`, { email: `par${i}@example.test`, weekIds: ["2027-07-05"] });
     await expireHold(id, 1);
   }
   const counts = new Map();
@@ -113,7 +113,7 @@ console.log("\n=== 4. Every run leaves a record; a failed run is visible and doe
   const rowsOk = (await pool.query(`SELECT source, ok, finished_at, summary FROM job_runs`)).rows;
   check("a run is recorded with its source, outcome and summary", rowsOk.length === 1 && rowsOk[0].source === "cron" && rowsOk[0].ok === true && rowsOk[0].finished_at && rowsOk[0].summary.released === 0 && ok.ok);
 
-  const victim = await reserveOk("victim", { email: "victim@example.test", weekIds: ["jul06"] });
+  const victim = await reserveOk("victim", { email: "victim@example.test", weekIds: ["2027-07-05"] });
   await expireHold(victim, 1);
   await pool.query(`CREATE OR REPLACE FUNCTION test_block_release() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.status = 'cancelled' THEN RAISE EXCEPTION 'simulated database trouble'; END IF; RETURN NEW; END $$`);
   await pool.query(`CREATE TRIGGER test_block_release BEFORE UPDATE ON registrations FOR EACH ROW EXECUTE FUNCTION test_block_release()`);
@@ -191,7 +191,7 @@ console.log("\n=== 7. The scheduler's own door: the cron URL ===");
   check("the wrong secret: 401", (await call({ authorization: "Bearer test-only-cron-secret-0123456780" })).status === 401);
   check("the secret in the query string is not accepted", (await cronRoute.GET(new Request(`${url}?secret=test-only-cron-secret-0123456789`))).status === 401);
   check("nothing ran for the refused calls", (await pool.query(`SELECT count(*)::int AS n FROM job_runs`)).rows[0].n === 0);
-  const id = await reserveOk("cron-door", { email: "crondoor@example.test", weekIds: ["jul06"] });
+  const id = await reserveOk("cron-door", { email: "crondoor@example.test", weekIds: ["2027-07-05"] });
   await expireHold(id, 1);
   const good = await call({ authorization: "Bearer test-only-cron-secret-0123456789" });
   const body = await good.json();
@@ -205,7 +205,7 @@ console.log("\n=== 7. The scheduler's own door: the cron URL ===");
 console.log("\n=== 8. Load and limits ===");
 {
   await reset();
-  const weeks = ["jun22", "jun29", "jul06", "jul13", "jul20", "jul27", "aug03", "aug10", "aug17", "aug24"];
+  const weeks = ["2027-06-21", "2027-06-28", "2027-07-05", "2027-07-12", "2027-07-19", "2027-07-26", "2027-08-02", "2027-08-09", "2027-08-16", "2027-08-23"];
   for (let i = 0; i < 120; i++) await reserveOk(`load${i}`, { email: `load${i}@example.test`, weekIds: [weeks[i % 10]] });
   await pool.query(`UPDATE registrations SET hold_expires_at = now() - interval '1 hour'`);
   const m = mailer();
@@ -216,11 +216,11 @@ console.log("\n=== 8. Load and limits ===");
   const seconds = (Date.now() - t0) / 1000;
   check("120 reservations past their hold are all released in one run", s.released === 120 && (await pool.query(`SELECT count(*)::int AS n FROM registrations WHERE status='cancelled'`)).rows[0].n === 120);
   check("and the run takes seconds, not minutes", seconds < 30, `${seconds.toFixed(1)}s`);
-  check("every one of those families was told (release notices) over three bounded runs, and the weeks are free again", m.sent.filter((x) => x.to.startsWith("load")).length === 120 && (await h.week("jul06")).taken_count === 0);
+  check("every one of those families was told (release notices) over three bounded runs, and the weeks are free again", m.sent.filter((x) => x.to.startsWith("load")).length === 120 && (await h.week("2027-07-05")).taken_count === 0);
 
   // A slow mail server cannot make a run overshoot its time allowance.
   await reset();
-  for (let i = 0; i < 20; i++) await reserveOk(`slow${i}`, { email: `slow${i}@example.test`, weekIds: ["jul06"] });
+  for (let i = 0; i < 20; i++) await reserveOk(`slow${i}`, { email: `slow${i}@example.test`, weekIds: ["2027-07-05"] });
   const slowMailer = { send: async () => { await new Promise((r) => setTimeout(r, 300)); } };
   const t1 = Date.now();
   const bounded = await runScheduledCheck({ source: "cron", origin: ORIGIN, send: slowMailer.send, adminEmails: ADMINS, timeBudgetMs: 2_500 });

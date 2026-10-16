@@ -29,7 +29,7 @@ console.log("\n=== 2. A repeated submission caught half-way by the database does
 {
   await resetAll();
   const key = "pool-of-one-key-0001";
-  const body = input("rival", { idempotencyKey: key, email: "rival@example.test", weekIds: ["jul06"] });
+  const body = input("rival", { idempotencyKey: key, email: "rival@example.test", weekIds: ["2027-07-05"] });
 
   // Another server instance has this same submission in flight: its row exists but is not yet
   // committed, so ours cannot see it, tries to insert, and has to wait for the other to finish.
@@ -43,7 +43,7 @@ console.log("\n=== 2. A repeated submission caught half-way by the database does
     [key]
   );
   const child = await other.query(`INSERT INTO children (registration_id, full_name, date_of_birth, age, health_info) VALUES ($1,'Rival Kid','2017-01-01','9','none') RETURNING id`, [row.rows[0].id]);
-  await other.query(`INSERT INTO registration_spots (registration_id, child_id, week_id) VALUES ($1,$2,'jul06')`, [row.rows[0].id, child.rows[0].id]);
+  await other.query(`INSERT INTO registration_spots (registration_id, child_id, week_id) VALUES ($1,$2,'2027-07-05')`, [row.rows[0].id, child.rows[0].id]);
   const ours = campDb.reserveRegistration(body);
   await new Promise((r) => setTimeout(r, 400));
   await other.query("COMMIT");
@@ -63,7 +63,7 @@ console.log("\n=== 3. A burst of families through the real request path, on one 
 {
   await resetAll();
   await pool.query(`DELETE FROM rate_limit_counters`);
-  const weeks = ["jun22", "jun29", "jul06", "jul13", "jul20", "jul27", "aug03", "aug10", "aug17", "aug24"];
+  const weeks = ["2027-06-21", "2027-06-28", "2027-07-05", "2027-07-12", "2027-07-19", "2027-07-26", "2027-08-02", "2027-08-09", "2027-08-16", "2027-08-23"];
   const call = (i) => {
     // Every fourth family is two siblings for one week; the rest are one child for two weeks:
     // 16 child-weeks per camp week on average, so nothing fills up.

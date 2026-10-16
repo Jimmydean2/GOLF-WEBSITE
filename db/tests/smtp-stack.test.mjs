@@ -62,7 +62,7 @@ console.log("\n=== 3. The mail server is down for a while ===");
 {
   await reset();
   const ids = [];
-  for (let i = 0; i < 6; i++) ids.push(await reserveOk(`down${i}`, { email: `down${i}@example.test`, weekIds: ["jul06"] }));
+  for (let i = 0; i < 6; i++) ids.push(await reserveOk(`down${i}`, { email: `down${i}@example.test`, weekIds: ["2027-07-05"] }));
   await sink.pause();
   const t0 = Date.now();
   const outage = await processOutbox({ coachMode: "off" });
@@ -82,7 +82,7 @@ console.log("\n=== 3. The mail server is down for a while ===");
 console.log("\n=== 4. A busy server that says 'try again later' ===");
 {
   await reset();
-  for (let i = 0; i < 9; i++) await reserveOk(`busy${i}`, { email: `busy${i}@example.test`, weekIds: ["jul13"] });
+  for (let i = 0; i < 9; i++) await reserveOk(`busy${i}`, { email: `busy${i}@example.test`, weekIds: ["2027-07-12"] });
   sink.set({ failEvery: 3 });
   let rounds = 0;
   let now = Date.now();
@@ -100,7 +100,7 @@ console.log("\n=== 4. A busy server that says 'try again later' ===");
 console.log("\n=== 5. A slow server, and a connection cut in the middle of a message ===");
 {
   await reset();
-  await reserveOk("slow", { email: "slow@example.test", weekIds: ["jul20"] });
+  await reserveOk("slow", { email: "slow@example.test", weekIds: ["2027-07-19"] });
   sink.set({ delayMs: 4_000 });
   const t0 = Date.now();
   const slow = await processOutbox({ coachMode: "off" });
@@ -117,8 +117,8 @@ console.log("\n=== 5. A slow server, and a connection cut in the middle of a mes
 console.log("\n=== 6. A mistyped address ===");
 {
   await reset();
-  const typo = await reserveOk("typo", { email: "parent@gmial.example", weekIds: ["jul27"] });
-  const fine = await reserveOk("fine", { email: "fine@example.test", weekIds: ["aug03"] });
+  const typo = await reserveOk("typo", { email: "parent@gmial.example", weekIds: ["2027-07-26"] });
+  const fine = await reserveOk("fine", { email: "fine@example.test", weekIds: ["2027-08-02"] });
   sink.set({ rejectRecipients: new Set(["parent@gmial.example"]) });
   const run = await processOutbox({ coachMode: "off" });
   check("the rejected address is marked undeliverable, and the next family is unaffected", run.failed === 1 && sink.to("fine@example.test").length === 1);
@@ -134,7 +134,7 @@ console.log("\n=== 6. A mistyped address ===");
 console.log("\n=== 7. A release notice and a reminder, over real SMTP ===");
 {
   await reset();
-  const lapsed = await reserveOk("lapse", { email: "lapse@example.test", weekIds: ["aug10"] });
+  const lapsed = await reserveOk("lapse", { email: "lapse@example.test", weekIds: ["2027-08-09"] });
   await pool.query(`DELETE FROM email_outbox`);
   await expireHold(lapsed, 1);
   await campDb.releaseExpiredReservations();
@@ -148,7 +148,7 @@ console.log("\n=== 7. A release notice and a reminder, over real SMTP ===");
 console.log("\n=== 8. A large batch ===");
 {
   await reset();
-  const weeks = ["jun22", "jun29", "jul06", "jul13", "jul20", "jul27", "aug03", "aug10", "aug17", "aug24"];
+  const weeks = ["2027-06-21", "2027-06-28", "2027-07-05", "2027-07-12", "2027-07-19", "2027-07-26", "2027-08-02", "2027-08-09", "2027-08-16", "2027-08-23"];
   for (let i = 0; i < 100; i++) await reserveOk(`batch${i}`, { email: `batch${i}@example.test`, weekIds: [weeks[i % 10]] });
   const t0 = Date.now();
   let total = 0;

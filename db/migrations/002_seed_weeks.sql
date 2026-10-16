@@ -1,20 +1,22 @@
--- Seeds the 10 camp weeks from the site's existing content config.
--- Safe to re-run: ON CONFLICT updates nothing, so it never clobbers an
--- admin's live edits to capacity/price/dates after the first run.
+-- Seeds the camp weeks for the 2027 season.
 --
--- NOTE: start_date/end_date use a placeholder year — update these (via
--- the admin dashboard, once built, or directly here) to match the actual
--- camp season before opening registration.
+-- GENERATED from src/lib/season.ts by `npm run season:write`. Change the calendar THERE (and
+-- run the command again); a test fails if this file and the calendar disagree.
+--
+-- A week's id is the ISO date of its Monday. This file was rewritten before the first
+-- deployment. Once it has been applied to a real database it must never change again: a later
+-- season is a new migration. Safe to re-run: ON CONFLICT updates nothing, so it never
+-- clobbers an administrator's live edits to capacity, price or open/closed state.
 
 INSERT INTO camp_weeks (id, label, start_date, end_date, max_capacity, price_cents) VALUES
-  ('jun22', 'June 22, 23, 25 & 26', '2027-06-22', '2027-06-26', 30, 38000),
-  ('jun29', 'June 29, 30 & July 2, 3', '2027-06-29', '2027-07-03', 30, 38000),
-  ('jul06', 'July 6, 7, 8 & 9',       '2027-07-06', '2027-07-09', 30, 38000),
-  ('jul13', 'July 13, 14, 15 & 16',   '2027-07-13', '2027-07-16', 30, 38000),
-  ('jul20', 'July 20, 21, 22 & 23',   '2027-07-20', '2027-07-23', 30, 38000),
-  ('jul27', 'July 27, 28, 29 & 30',   '2027-07-27', '2027-07-30', 30, 38000),
-  ('aug03', 'August 3, 4, 5 & 6',     '2027-08-03', '2027-08-06', 30, 38000),
-  ('aug10', 'August 10, 11, 12 & 13', '2027-08-10', '2027-08-13', 30, 38000),
-  ('aug17', 'August 17, 18, 19 & 20', '2027-08-17', '2027-08-20', 30, 38000),
-  ('aug24', 'August 24, 25, 26 & 27', '2027-08-24', '2027-08-27', 30, 38000)
+  ('2027-06-21', 'June 21, 22, 23 & 25', '2027-06-21', '2027-06-25', 30, 38000),
+  ('2027-06-28', 'June 28, 29, 30 & July 2', '2027-06-28', '2027-07-02', 30, 38000),
+  ('2027-07-05', 'July 5, 6, 7 & 8', '2027-07-05', '2027-07-08', 30, 38000),
+  ('2027-07-12', 'July 12, 13, 14 & 15', '2027-07-12', '2027-07-15', 30, 38000),
+  ('2027-07-19', 'July 19, 20, 21 & 22', '2027-07-19', '2027-07-22', 30, 38000),
+  ('2027-07-26', 'July 26, 27, 28 & 29', '2027-07-26', '2027-07-29', 30, 38000),
+  ('2027-08-02', 'August 2, 3, 4 & 5', '2027-08-02', '2027-08-05', 30, 38000),
+  ('2027-08-09', 'August 9, 10, 11 & 12', '2027-08-09', '2027-08-12', 30, 38000),
+  ('2027-08-16', 'August 16, 17, 18 & 19', '2027-08-16', '2027-08-19', 30, 38000),
+  ('2027-08-23', 'August 23, 24, 25 & 26', '2027-08-23', '2027-08-26', 30, 38000)
 ON CONFLICT (id) DO NOTHING;

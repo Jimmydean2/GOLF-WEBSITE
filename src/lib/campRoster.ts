@@ -271,18 +271,10 @@ function buildCoverSheet(wb: ExcelJS.Workbook, weekRosters: WeekRoster[]) {
   }
 }
 
-const TAB_NAMES: Record<string, string> = {
-  jun22: "Jun 22-26",
-  jun29: "Jun 29-Jul 3",
-  jul06: "Jul 6-9",
-  jul13: "Jul 13-16",
-  jul20: "Jul 20-23",
-  jul27: "Jul 27-30",
-  aug03: "Aug 3-6",
-  aug10: "Aug 10-13",
-  aug17: "Aug 17-20",
-  aug24: "Aug 24-27",
-};
+// The sheet tab for a week, e.g. "Jun 21-25", comes from the season calendar.
+function tabName(weekId: string): string {
+  return juniorCamps.weeks.find((w) => w.id === weekId)?.shortLabel ?? weekId;
+}
 
 export async function buildCampRosterWorkbook(): Promise<ExcelJS.Workbook> {
   const weekRosters = await getCampRosterData();
@@ -293,7 +285,7 @@ export async function buildCampRosterWorkbook(): Promise<ExcelJS.Workbook> {
 
   buildCoverSheet(wb, weekRosters);
   for (const weekRoster of weekRosters) {
-    buildWeekSheet(wb, TAB_NAMES[weekRoster.id] ?? weekRoster.id, weekRoster);
+    buildWeekSheet(wb, tabName(weekRoster.id), weekRoster);
   }
 
   return wb;

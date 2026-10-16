@@ -19,6 +19,8 @@ const flag = (name) => {
 };
 const baseUrl = flag("--url");
 const testEmailTo = flag("--send-test-email");
+// --production: this is the REAL site. Rehearsal-only settings become failures.
+const production = args.includes("--production");
 
 const results = [];
 const add = (level, title, detail = "") => results.push({ level, title, detail });
@@ -120,6 +122,46 @@ async function checkEmail() {
   }
 }
 
+// --- the season calendar ---------------------------------------------------------------
+// Loaded from the same file the site uses (src/lib/season.ts). Plain Node 22.18+ reads
+// TypeScript directly; the harmless "module type" notice it prints is silenced.
+let seasonModule = null;
+async function loadSeason() {
+  try {
+    process.removeAllListeners("warning");
+    seasonModule = await import("../src/lib/season.ts");
+  } catch (err) {
+    warn("Season calendar", `Could not read src/lib/season.ts here (${String(err.message).slice(0, 80)}). Needs Node 22.18 or newer, or run this through tsx.`);
+  }
+}
+
+function checkSeason() {
+  if (!seasonModule) return;
+  const { season, parseOpensAt } = seasonModule;
+  const preview = env("SEASON_PREVIEW") === "true";
+
+  if (season.confirmed) {
+    pass("Season calendar", `${season.year}: ${season.weeks.length} weeks, confirmed by the owner`);
+    if (preview) (production ? fail : warn)("SEASON_PREVIEW", "Set to true, but the calendar is already confirmed, so it does nothing here. Remove it from the real site: it is for rehearsal sites only.");
+  } else if (preview) {
+    (production ? fail : warn)("Season calendar", `${season.year} is a DRAFT calendar, shown only because SEASON_PREVIEW=true. Fine for a rehearsal; the real site must not use it. Confirm the dates (docs/SEASON_2027.md) and set confirmed: true in src/lib/season.ts.`);
+  } else {
+    fail("Season calendar", `${season.year} dates are not confirmed yet, so the site says 'dates coming soon' and registration refuses. Confirm the dates (docs/SEASON_2027.md), then set confirmed: true in src/lib/season.ts. (A rehearsal site sets SEASON_PREVIEW=true.)`);
+  }
+
+  const fromEnv = parseOpensAt(env("REGISTRATION_OPENS_AT"));
+  const fromCalendar = parseOpensAt(season.registrationOpensAt);
+  if (!fromEnv.ok) fail("REGISTRATION_OPENS_AT", "Not a time the site can read. Write it like 2027-01-16T09:00:00-05:00 (date, time, and the offset from UTC: -05:00 in winter, -04:00 in summer). Until fixed, registration stays CLOSED.");
+  else if (!fromCalendar.ok) fail("Registration opening time", "season.registrationOpensAt in src/lib/season.ts is not a time the site can read. Until fixed, registration stays CLOSED.");
+  else {
+    const opens = fromEnv.iso ?? fromCalendar.iso;
+    if (fromEnv.iso) (production ? fail : warn)("REGISTRATION_OPENS_AT", `Overrides the calendar${production ? ", and this is meant to be the real site: remove it" : " (fine for rehearsing the opening moment)"}.`);
+    if (!opens) warn("Registration opening time", "Not set: registration opens the moment the site goes live. If you plan to announce a date and time, set season.registrationOpensAt in src/lib/season.ts.");
+    else if (Date.parse(opens) > Date.now()) pass("Registration opening time", `${new Date(opens).toLocaleString("en-CA", { timeZone: "America/Toronto", dateStyle: "full", timeStyle: "short" })} (Montreal time)`);
+    else warn("Registration opening time", `${opens} is in the past, so registration is already open.`);
+  }
+}
+
 // --- database ---------------------------------------------------------------------------
 async function checkDatabase() {
   const url = env("DATABASE_URL");
@@ -163,10 +205,30 @@ async function checkDatabase() {
     if (missing.length) fail("Migrations", `Missing tables: ${missing.join(", ")}. Run all of db/migrations (001 to 005) with: npm run db:migrate`);
     else pass("Migrations", "all expected tables exist (001 to 005)");
     if (!missing.length) {
-      const weeks = (await client.query(`SELECT count(*)::int AS n, min(max_capacity) AS lo, max(max_capacity) AS hi, min(price_cents) AS pmin, max(price_cents) AS pmax FROM camp_weeks`)).rows[0];
-      if (weeks.n !== 10) warn("Camp weeks", `${weeks.n} weeks found (expected 10).`);
-      else pass("Camp weeks", `10 weeks, capacity ${weeks.lo}${weeks.lo === weeks.hi ? "" : "–" + weeks.hi}, price $${(weeks.pmin / 100).toFixed(2)}${weeks.pmin === weeks.pmax ? "" : "–" + (weeks.pmax / 100).toFixed(2)} a week before tax`);
-      if (weeks.pmin < 5000) warn("Camp weeks", "A week costs under $50: this looks like a rehearsal price. Make sure it is set back before launch.");
+      const weekRows = (await client.query(`SELECT id, label, start_date::text AS start_date, end_date::text AS end_date, max_capacity, price_cents FROM camp_weeks ORDER BY start_date`)).rows;
+      const weeks = {
+        n: weekRows.length,
+        lo: Math.min(...weekRows.map((w) => w.max_capacity)),
+        hi: Math.max(...weekRows.map((w) => w.max_capacity)),
+        pmin: Math.min(...weekRows.map((w) => w.price_cents)),
+        pmax: Math.max(...weekRows.map((w) => w.price_cents)),
+      };
+      if (weekRows.length === 0) fail("Camp weeks", "No weeks in the database. Run all of db/migrations (npm run db:migrate).");
+      else {
+        pass("Camp weeks", `${weeks.n} weeks, capacity ${weeks.lo}${weeks.lo === weeks.hi ? "" : "–" + weeks.hi}, price $${(weeks.pmin / 100).toFixed(2)}${weeks.pmin === weeks.pmax ? "" : "–" + (weeks.pmax / 100).toFixed(2)} a week before tax`);
+        if (seasonModule) {
+          const byId = new Map(weekRows.map((w) => [w.id, w]));
+          const calendar = seasonModule.season.weeks;
+          const missing = calendar.filter((w) => !byId.has(w.id)).map((w) => w.id);
+          const wrong = calendar.filter((w) => byId.has(w.id) && (byId.get(w.id).start_date !== w.startDate || byId.get(w.id).end_date !== w.endDate)).map((w) => w.id);
+          const extra = weekRows.filter((w) => !calendar.some((c) => c.id === w.id)).map((w) => w.id);
+          if (missing.length) fail("Camp weeks vs calendar", `Not in the database: ${missing.join(", ")}. The calendar (src/lib/season.ts) and the database have drifted apart.`);
+          if (wrong.length) fail("Camp weeks vs calendar", `Different dates in the database for: ${wrong.join(", ")}.`);
+          if (extra.length) warn("Camp weeks vs calendar", `In the database but not in the ${seasonModule.season.year} calendar: ${extra.join(", ")} (an older season?). They are ignored by the site.`);
+          if (!missing.length && !wrong.length) pass("Camp weeks vs calendar", `all ${calendar.length} calendar weeks are in the database with the same dates`);
+        }
+      }
+      if (weekRows.length && weeks.pmin < 5000) warn("Camp weeks", "A week costs under $50: this looks like a rehearsal price. Make sure it is set back before launch.");
       const regs = (await client.query(`SELECT count(*)::int AS n FROM registrations`)).rows[0].n;
       if (regs > 0) warn("Registrations", `${regs} registrations already exist in this database. If this is meant to be a clean launch database, clear the rehearsal data first (docs/LAUNCH_REHEARSAL.md, section 8). If it is the live one, these are REAL families.`);
       else pass("Registrations", "none yet (a clean database)");
@@ -249,6 +311,8 @@ async function checkLive(url) {
 }
 
 checkSecrets();
+await loadSeason();
+checkSeason();
 checkRepo();
 await checkEmail();
 await checkDatabase();

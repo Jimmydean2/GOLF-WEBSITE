@@ -3,6 +3,7 @@
 // blocked, double-booked or sent to someone else's reservation?
 
 import { createTestDatabase } from "./helpers/testdb.mjs";
+import { labelForWeekId } from "../../src/lib/season.ts";
 
 process.env.DB_POOL_MAX ||= "20";
 process.env.REGISTRATION_LINK_SECRET = "test-only-registration-link-secret-0123456789";
@@ -14,7 +15,7 @@ const { registrationIdFromToken } = await import("../../src/lib/registrationLink
 const h = createHarness();
 const { pool, campDb, check, resetAll, input, kids, confirmFor, invariants } = h;
 
-const ALL_WEEKS_FLOW = ["jun22", "jun29", "jul06", "jul13", "jul20", "jul27", "aug03", "aug10", "aug17", "aug24"];
+const ALL_WEEKS_FLOW = ["2027-06-21", "2027-06-28", "2027-07-05", "2027-07-12", "2027-07-19", "2027-07-26", "2027-08-02", "2027-08-09", "2027-08-16", "2027-08-23"];
 const freshState = async () => {
   await resetAll();
   await pool.query(`DELETE FROM rate_limit_counters`);
@@ -114,19 +115,19 @@ console.log("\n=== 2. Retrying the same submission is free and returns the same 
 console.log("\n=== 3. Trying while a week is full never locks a family out ===");
 {
   await freshState();
-  await h.fill("jul06", 30, "full");
+  await h.fill("2027-07-05", 30, "full");
   const ip = newIp();
   const email = "waiting.family@example.test";
   const statuses = [];
   for (let i = 0; i < 40; i++) {
-    statuses.push((await post(payload(`wait${i}`, { email, weeks: ["jul06"], children: kids(1, `W${i}`) }), { ip })).status);
+    statuses.push((await post(payload(`wait${i}`, { email, weeks: ["2027-07-05"], children: kids(1, `W${i}`) }), { ip })).status);
   }
   check("40 attempts at a full week are each told the week is full", statuses.every((s) => s === 409), [...new Set(statuses)].join(","));
   check("none of them used any allowance", (await hitsFor("register-ip")) === 0 && (await hitsFor("register-email")) === 0);
-  const other = await post(payload("waitok", { email, weeks: ["jul13"], children: kids(1, "WOK") }), { ip });
+  const other = await post(payload("waitok", { email, weeks: ["2027-07-12"], children: kids(1, "WOK") }), { ip });
   check("the same family and connection can then reserve another week", other.status === 200, `${other.status} ${other.data.error ?? ""}`);
-  const closed = await post(payload("closed", { email: "other.family@example.test", weeks: ["jul06", "jul13"], children: kids(1, "C") }), { ip: newIp() });
-  check("a multi-week request including the full week is refused as a whole", closed.status === 409 && closed.data.code === "weeks_full" && closed.data.weekIds.join() === "jul06", JSON.stringify(closed.data));
+  const closed = await post(payload("closed", { email: "other.family@example.test", weeks: ["2027-07-05", "2027-07-12"], children: kids(1, "C") }), { ip: newIp() });
+  check("a multi-week request including the full week is refused as a whole", closed.status === 409 && closed.data.code === "weeks_full" && closed.data.weekIds.join() === "2027-07-05", JSON.stringify(closed.data));
   check("and no partial reservation was left behind", (await registrations()) === 30 + 1);
   await invariants("full week");
 }
@@ -140,22 +141,22 @@ console.log("\n=== 4. The allowances still stop a runaway script ===");
   const statuses = [];
   for (let i = 0; i < REGISTRATION_LIMITS.newPerIpPerHour + 3; i++) {
     statuses.push(
-      (await post(payload(`bot${i}`, { weeks: ["aug24"], children: kids(1, `B${i}`) }), { ip })).status
+      (await post(payload(`bot${i}`, { weeks: ["2027-08-23"], children: kids(1, `B${i}`) }), { ip })).status
     );
   }
   const created = statuses.filter((s) => s === 200).length;
   const limited = statuses.filter((s) => s === 429).length;
   check(`one connection can make ${REGISTRATION_LIMITS.newPerIpPerHour} reservations an hour, then is slowed down`, created === REGISTRATION_LIMITS.newPerIpPerHour && limited === 3, `${created} created, ${limited} limited`);
-  const limitedAnswer = await post(payload("bot-late", { weeks: ["aug17"], children: kids(1, "BL") }), { ip });
+  const limitedAnswer = await post(payload("bot-late", { weeks: ["2027-08-16"], children: kids(1, "BL") }), { ip });
   check("the slow-down answer tells the family how long to wait", limitedAnswer.status === 429 && Number(limitedAnswer.headers.get("retry-after")) > 0 && limitedAnswer.data.code === "rate_limited");
-  const elsewhere = await post(payload("neighbour", { weeks: ["aug17"], children: kids(1, "N") }), { ip: newIp() });
+  const elsewhere = await post(payload("neighbour", { weeks: ["2027-08-16"], children: kids(1, "N") }), { ip: newIp() });
   check("another connection is not affected", elsewhere.status === 200);
   check("hitting the limit created no extra reservations", (await registrations()) === REGISTRATION_LIMITS.newPerIpPerHour + 1);
   check("refused attempts did not push the counter past the limit", (await hitsFor("register-ip")) <= REGISTRATION_LIMITS.newPerIpPerHour + 1);
 
   // An hour later the window has rolled over.
   await pool.query(`UPDATE rate_limit_counters SET window_start = window_start - interval '1 hour'`);
-  const later = await post(payload("bot-after-hour", { weeks: ["aug10"], children: kids(1, "BH") }), { ip });
+  const later = await post(payload("bot-after-hour", { weeks: ["2027-08-09"], children: kids(1, "BH") }), { ip });
   check("an hour later the same connection can register again", later.status === 200, `${later.status}`);
 
   // A family cannot be hit by the per-email limit before the 8-unpaid limit, and paying resets nothing it should not.
@@ -164,7 +165,7 @@ console.log("\n=== 4. The allowances still stop a runaway script ===");
   const phone = "438-555-0100";
   const results = [];
   for (let i = 0; i < REGISTRATION_LIMITS.newPerEmailPerHour + 1; i++) {
-    const r = await post(payload(`busy${i}`, { email, primaryPhone: phone, weeks: ["jul13"], children: kids(1, `Busy${i}`) }), { ip: newIp() });
+    const r = await post(payload(`busy${i}`, { email, primaryPhone: phone, weeks: ["2027-07-12"], children: kids(1, `Busy${i}`) }), { ip: newIp() });
     results.push(r);
     if (r.data.reference) {
       const id = (await pool.query(`SELECT id FROM registrations WHERE reference_code = $1`, [r.data.reference])).rows[0].id;
@@ -182,39 +183,39 @@ console.log("\n=== 5. A second registration for the same child and week is not c
   await freshState();
   const family = { email: "tremblay.family@example.test", primaryPhone: "514-555-0177" };
   const emile = { fullName: "Émile Tremblay", dateOfBirth: "2016-05-05", age: "10", healthInfo: "none" };
-  const first = await post(payload("dup", { ...family, children: [emile], weeks: ["jul06", "jul13"] }));
+  const first = await post(payload("dup", { ...family, children: [emile], weeks: ["2027-07-05", "2027-07-12"] }));
   check("the first registration is accepted", first.status === 200);
 
   // The parent never got the email, so they fill the form in again (a brand-new idempotency key).
-  const again = await post(payload("dup-again", { ...family, children: [{ ...emile, fullName: "emile  TREMBLAY" }], weeks: ["jul06", "jul13"] }));
+  const again = await post(payload("dup-again", { ...family, children: [{ ...emile, fullName: "emile  TREMBLAY" }], weeks: ["2027-07-05", "2027-07-12"] }));
   check("registering the same child for the same weeks again is refused, politely", again.status === 409 && again.data.code === "already_registered", `${again.status} ${again.data.error}`);
   check("the refusal gives no link and no reference", !again.data.statusPath && !again.data.reference);
   check("it names the child as the parent typed them, and both weeks",
-    again.data.error.includes("emile  TREMBLAY") && again.data.error.includes("July 6, 7, 8 & 9") && again.data.error.includes("July 13, 14, 15 & 16"), again.data.error);
+    again.data.error.includes("emile  TREMBLAY") && again.data.error.includes(labelForWeekId("2027-07-05")) && again.data.error.includes(labelForWeekId("2027-07-12")), again.data.error);
   check("no second reservation was made", (await registrations()) === 1);
   check("the first reservation's payment instructions are to be re-sent (to the address on file)",
     again.calls.duplicate.length === 1 && again.calls.duplicate[0].registrationIds.length === 1);
   check("the refused attempt used none of the allowance", (await hitsFor("register-ip")) === 1 && (await hitsFor("register-email")) === 1);
 
-  const partial = await post(payload("dup-partial", { ...family, children: [emile], weeks: ["jul13", "jul20"] }));
+  const partial = await post(payload("dup-partial", { ...family, children: [emile], weeks: ["2027-07-12", "2027-07-19"] }));
   check("overlapping on just one week is refused too (a child cannot attend a week twice)", partial.status === 409 && partial.data.code === "already_registered");
-  const newWeek = await post(payload("dup-newweek", { ...family, children: [emile], weeks: ["jul20", "jul27"] }));
+  const newWeek = await post(payload("dup-newweek", { ...family, children: [emile], weeks: ["2027-07-19", "2027-07-26"] }));
   check("the same child for different weeks is fine", newWeek.status === 200, `${newWeek.status} ${newWeek.data.error ?? ""}`);
-  const sibling = await post(payload("dup-sibling", { ...family, children: [{ fullName: "Zoé Tremblay", dateOfBirth: "2018-03-03", age: "8", healthInfo: "none" }], weeks: ["jul06", "jul13"] }));
+  const sibling = await post(payload("dup-sibling", { ...family, children: [{ fullName: "Zoé Tremblay", dateOfBirth: "2018-03-03", age: "8", healthInfo: "none" }], weeks: ["2027-07-05", "2027-07-12"] }));
   check("a sibling in the same weeks is fine", sibling.status === 200, `${sibling.status} ${sibling.data.error ?? ""}`);
-  const phoneOnly = await post(payload("dup-phone", { email: "other.address@example.test", primaryPhone: "(514) 555-0177", children: [emile], weeks: ["jul06"] }));
+  const phoneOnly = await post(payload("dup-phone", { email: "other.address@example.test", primaryPhone: "(514) 555-0177", children: [emile], weeks: ["2027-07-05"] }));
   check("the same phone number with another email is still the same family", phoneOnly.status === 409 && phoneOnly.data.code === "already_registered");
-  const stranger = await post(payload("dup-stranger", { email: "unrelated@example.test", primaryPhone: "514-555-0999", children: [emile], weeks: ["jul06"] }));
+  const stranger = await post(payload("dup-stranger", { email: "unrelated@example.test", primaryPhone: "514-555-0999", children: [emile], weeks: ["2027-07-05"] }));
   check("an unrelated family with a same-named child is not affected", stranger.status === 200);
 
   // Paid and released reservations.
   const firstId = (await pool.query(`SELECT id FROM registrations WHERE reference_code = $1`, [first.data.reference])).rows[0].id;
   await confirmFor(firstId);
-  const afterPaid = await post(payload("dup-paid", { ...family, children: [emile], weeks: ["jul06"] }));
+  const afterPaid = await post(payload("dup-paid", { ...family, children: [emile], weeks: ["2027-07-05"] }));
   check("a child who has already PAID for a week cannot be registered for it again", afterPaid.status === 409 && afterPaid.data.code === "already_registered");
   check("and since it is paid, nothing is re-sent", afterPaid.calls.duplicate.length === 0 && /unpaid/.test(afterPaid.data.error) === false);
   await campDb.cancelRegistration(firstId, "family changed plans", { releaseReason: "owner_cancelled" });
-  const afterRelease = await post(payload("dup-released", { ...family, children: [emile], weeks: ["jul06"] }));
+  const afterRelease = await post(payload("dup-released", { ...family, children: [emile], weeks: ["2027-07-05"] }));
   check("once that reservation is released the child can be registered again", afterRelease.status === 200, `${afterRelease.status} ${afterRelease.data.error ?? ""}`);
   await invariants("duplicates");
 }
@@ -223,20 +224,20 @@ console.log("\n=== 5. A second registration for the same child and week is not c
 console.log("\n=== 6. Double-clicks and races ===");
 {
   await freshState();
-  const body = payload("race", { email: "double.click@example.test", children: kids(2, "Race"), weeks: ["jul06", "jul13", "jul20"] });
+  const body = payload("race", { email: "double.click@example.test", children: kids(2, "Race"), weeks: ["2027-07-05", "2027-07-12", "2027-07-19"] });
   const same = await Promise.all(Array.from({ length: 6 }, () => post(body, { ip: newIp() })));
   check("six simultaneous copies of one submission all succeed", same.every((r) => r.status === 200), same.map((r) => r.status).join(","));
   check("they all return the same reservation", new Set(same.map((r) => r.data.reference)).size === 1);
-  check("exactly one reservation holds 2 children x 3 weeks = 6 spots", (await registrations()) === 1 && (await h.activeSpots("jul06")) === 2);
+  check("exactly one reservation holds 2 children x 3 weeks = 6 spots", (await registrations()) === 1 && (await h.activeSpots("2027-07-05")) === 2);
   check("the follow-up ran exactly once", same.reduce((n, r) => n + r.calls.created.length, 0) === 1);
 
   await freshState();
-  const base = payload("race2", { email: "impatient.parent@example.test", children: kids(1, "Imp"), weeks: ["aug03"] });
+  const base = payload("race2", { email: "impatient.parent@example.test", children: kids(1, "Imp"), weeks: ["2027-08-02"] });
   const copies = await Promise.all(Array.from({ length: 5 }, (_, i) => post({ ...base, idempotencyKey: `impatient-copy-${i}-aaaaaaaa` }, { ip: newIp() })));
   const created = copies.filter((r) => r.status === 200).length;
   const refusedAsDuplicate = copies.filter((r) => r.status === 409 && r.data.code === "already_registered").length;
   check("five different-key copies of one submission: exactly one reservation is made", created === 1 && refusedAsDuplicate === 4, copies.map((r) => r.status).join(","));
-  check("and the week holds exactly one place", (await h.activeSpots("aug03")) === 1 && (await registrations()) === 1);
+  check("and the week holds exactly one place", (await h.activeSpots("2027-08-02")) === 1 && (await registrations()) === 1);
   await invariants("races");
 }
 
@@ -273,9 +274,9 @@ console.log("\n=== 7. Bad requests are turned away cleanly ===");
     check(`${label}: a 400 with a plain message`, r.status === 400 && typeof r.data.error === "string" && typeof r.data.code === "string", `${r.status} ${r.data.code}`);
   }
   check("none of that created a reservation or used any allowance", (await registrations()) === 0 && (await hitsFor("register")) === 0);
-  const odd = await post(payload("phones", { email: "phones@example.test", primaryPhone: "+33 1 23 45 67 89", secondaryPhone: "(514) 555-0100", weeks: ["jul13"], children: kids(1, "Ph") }), { ip });
+  const odd = await post(payload("phones", { email: "phones@example.test", primaryPhone: "+33 1 23 45 67 89", secondaryPhone: "(514) 555-0100", weeks: ["2027-07-12"], children: kids(1, "Ph") }), { ip });
   check("international and punctuated phone numbers are accepted", odd.status === 200, `${odd.status} ${odd.data.error ?? ""}`);
-  const twelve = await post(payload("twelve", { email: "twelve@example.test", children: kids(12, "Tw"), weeks: ["jul06"] }), { ip });
+  const twelve = await post(payload("twelve", { email: "twelve@example.test", children: kids(12, "Tw"), weeks: ["2027-07-05"] }), { ip });
   check("exactly 12 children in one registration is accepted", twelve.status === 200, `${twelve.status} ${twelve.data.error ?? ""}`);
 }
 

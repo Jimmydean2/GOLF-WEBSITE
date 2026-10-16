@@ -29,7 +29,7 @@ export function ensureBuilt({ force = false } = {}) {
   const stale = !existsSync(buildId) || statSync(buildId).mtimeMs < Math.max(newestSourceTime("src"), statSync("package.json").mtimeMs, statSync("next.config.ts").mtimeMs);
   if (!force && !stale) return false;
   console.log("(building the site for the HTTP tests; this takes about a minute)");
-  const build = spawnSync("node", ["node_modules/next/dist/bin/next", "build"], { stdio: "inherit", env: { ...process.env, NEXT_TELEMETRY_DISABLED: "1" } });
+  const build = spawnSync("node", ["node_modules/next/dist/bin/next", "build"], { stdio: "inherit", env: { ...process.env, NEXT_TELEMETRY_DISABLED: "1", SEASON_PREVIEW: "true" } });
   if (build.status !== 0) throw new Error("next build failed");
   return true;
 }
@@ -54,6 +54,9 @@ export async function startApp({ env = {}, build = true } = {}) {
       ...process.env,
       NODE_ENV: "production",
       NEXT_TELEMETRY_DISABLED: "1",
+      // The draft calendar is only public on a rehearsal site (see registrationWindow.ts).
+      SEASON_PREVIEW: "true",
+      REGISTRATION_OPENS_AT: "",
       REGISTRATION_LINK_SECRET: "test-only-registration-link-secret-0123456789",
       ADMIN_PASSWORD: "Local-QA-Only-Admin-Passphrase-2026",
       CRON_SECRET: "test-only-cron-secret-0123456789",

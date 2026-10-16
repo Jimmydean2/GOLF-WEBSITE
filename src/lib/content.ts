@@ -1,6 +1,8 @@
 // Single source of truth for James Dean Golf business content.
 // Fields marked TODO are placeholders pending real info from the client.
 
+import { season, type SeasonWeek } from "./season";
+
 export const business = {
   name: "James Dean Golf",
   tagline: "Golf Lessons & Academy in Montreal",
@@ -102,23 +104,10 @@ export const juniorPrograms = {
   ],
 };
 
-export type CampWeekId =
-  | "jun22"
-  | "jun29"
-  | "jul06"
-  | "jul13"
-  | "jul20"
-  | "jul27"
-  | "aug03"
-  | "aug10"
-  | "aug17"
-  | "aug24";
-
-export type CampWeek = {
-  id: CampWeekId;
-  label: string;
-  dates: string;
-};
+// A camp week's id is the ISO date of its Monday ("2027-06-21"). The calendar itself lives in
+// season.ts: the labels, dates and notes below are derived from it, never retyped.
+export type CampWeekId = string;
+export type CampWeek = SeasonWeek;
 
 export const juniorCamps = {
   pricePerWeek: 380,
@@ -146,20 +135,10 @@ export const juniorCamps = {
     "Campers may only be picked up by a parent/guardian or someone they've authorized in advance.",
     "Camps run rain or shine Monday–Thursday; Friday is held in reserve as a weather makeup day.",
   ],
-  // Live spots-remaining per week come from /api/camp-capacity (backed by
-  // the same Google Sheet as clinic sign-ups, on a separate tab).
-  weeks: [
-    { id: "jun22", label: "June 22, 23, 25 & 26", dates: "June 22, 23, 25, 26" },
-    { id: "jun29", label: "June 29, 30 & July 2, 3", dates: "June 29, 30, July 2, 3" },
-    { id: "jul06", label: "July 6, 7, 8 & 9", dates: "July 6, 7, 8, 9" },
-    { id: "jul13", label: "July 13, 14, 15 & 16", dates: "July 13, 14, 15, 16" },
-    { id: "jul20", label: "July 20, 21, 22 & 23", dates: "July 20, 21, 22, 23" },
-    { id: "jul27", label: "July 27, 28, 29 & 30", dates: "July 27, 28, 29, 30" },
-    { id: "aug03", label: "August 3, 4, 5 & 6", dates: "August 3, 4, 5, 6" },
-    { id: "aug10", label: "August 10, 11, 12 & 13", dates: "August 10, 11, 12, 13" },
-    { id: "aug17", label: "August 17, 18, 19 & 20", dates: "August 17, 18, 19, 20" },
-    { id: "aug24", label: "August 24, 25, 26 & 27", dates: "August 24, 25, 26, 27" },
-  ] satisfies CampWeek[],
+  // Live spots-remaining per week come from /api/camp-capacity (Postgres). The weeks
+  // themselves — ids, labels, dates, holiday notes — come from the season calendar.
+  year: season.year,
+  weeks: season.weeks,
 };
 
 export const bio = {

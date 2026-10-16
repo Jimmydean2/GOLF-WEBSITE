@@ -4,14 +4,22 @@ import { getCampWeeks } from "@/lib/campDb";
 import { maybeRunFromTraffic } from "@/lib/scheduledCheck";
 import { siteOrigin } from "@/lib/siteUrl";
 import { logError } from "@/lib/safeLog";
+import { registrationWindow } from "@/lib/registrationWindow";
 
 // Capacity now comes from Postgres (the authoritative store — see
 // src/lib/campDb.ts), not Google Sheets. Price-per-week and open/closed
 // state are included here too, since both are admin-configurable in the
 // database rather than hardcoded.
 export async function GET(request: Request) {
+  // Whether registration is open, not yet announced, or opens at a set moment. The form shows
+  // it and the registration endpoint enforces the same answer. serverNow lets a browser with a
+  // wrong clock still count down to the right moment.
+  const now = new Date();
+  const registration = registrationWindow(now);
+  const serverNow = now.toISOString();
+
   if (!isDatabaseConfigured()) {
-    return NextResponse.json({ configured: false, weeks: {} });
+    return NextResponse.json({ configured: false, weeks: {}, registration, serverNow });
   }
 
   try {
@@ -38,11 +46,11 @@ export async function GET(request: Request) {
       };
     }
 
-    return NextResponse.json({ configured: true, weeks });
+    return NextResponse.json({ configured: true, weeks, registration, serverNow });
   } catch (err) {
     logError("Failed to read camp capacity:", err);
     return NextResponse.json(
-      { configured: true, weeks: {}, error: "Could not read capacity right now." },
+      { configured: true, weeks: {}, registration, serverNow, error: "Could not read capacity right now." },
       { status: 502 }
     );
   }

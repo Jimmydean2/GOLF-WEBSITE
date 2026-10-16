@@ -53,7 +53,7 @@ export function createHarness() {
       codeOfConductAccepted: true,
       consentAccepted: true,
       children: [{ fullName: `Test Child ${label}`, dateOfBirth: "2018-01-01", age: "8", healthInfo: "none" }],
-      weekIds: ["jul06"],
+      weekIds: ["2027-07-05"],
       ...overrides,
     };
   }

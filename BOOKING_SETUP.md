@@ -83,7 +83,7 @@ left" counter on the Junior Camps page.
    exact column headers:
    `Timestamp | Parent Name | Email | Primary Phone | Secondary Phone | Child Name | Date of Birth | Child Age | Health/Medical Info | Emergency Contact Name | Emergency Contact Relationship | Emergency Contact Phone | Weeks | Code of Conduct Accepted | Consent Accepted | Registration ID | Paid | Paid At | Confirm Token`
    (A parent can register one child for several weeks at once — the "Weeks"
-   column lists all of them together, e.g. `jul06,jul13`, rather than one
+   column lists all of them together, e.g. `2027-07-05,2027-07-12`, rather than one
    row per week. The last four columns are filled in automatically by the
    site — you don't need to touch them. The real payment status lives in
    the camp database and your admin dashboard (Step 4 below), which is

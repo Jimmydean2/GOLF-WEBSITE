@@ -55,8 +55,8 @@ function family(tag, weeks) {
     consentAccepted: true,
   };
 }
-const A = family("Alpha", ["jul06"]);
-const B = family("Beta", ["jul13"]);
+const A = family("Alpha", ["2027-07-05"]);
+const B = family("Beta", ["2027-07-12"]);
 const sentinelsOf = (f) => [f.parentName, f.email, f.primaryPhone, f.secondaryPhone, f.emergencyName, f.emergencyRelationship, f.emergencyPhone, f.children[0].fullName, f.children[0].dateOfBirth, f.children[0].healthInfo];
 const leaks = (text, f) => sentinelsOf(f).filter((s) => text.includes(s));
 
@@ -218,9 +218,9 @@ console.log("\n=== 6. With the administrator's login, the same data appears (and
   const queue = await fetch(`${app.url}/api/admin/payment-queue`, { headers: { cookie: session.cookie, origin: app.url } });
   const text = await queue.text();
   check("the review queue lists both families (this is the administrator's job)", queue.status === 200 && text.includes(da.reference) && text.includes(db.reference));
-  const download = await fetch(`${app.url}/api/admin/camp-rosters/download?week=jul06`, { headers: { cookie: session.cookie } });
+  const download = await fetch(`${app.url}/api/admin/camp-rosters/download?week=2027-07-05`, { headers: { cookie: session.cookie } });
   check("the roster download works for the administrator", download.status === 200 && /spreadsheet|octet|xlsx/i.test(download.headers.get("content-type") ?? ""), `${download.status} ${download.headers.get("content-type")}`);
-  const anonymousDownload = await fetch(`${app.url}/api/admin/camp-rosters/download?week=jul06`);
+  const anonymousDownload = await fetch(`${app.url}/api/admin/camp-rosters/download?week=2027-07-05`);
   check("and refuses everyone else", anonymousDownload.status === 401);
   await fetch(`${app.url}/api/admin/logout`, { method: "POST", headers: { cookie: session.cookie, origin: app.url } });
   const afterLogout = await fetch(`${app.url}/api/admin/payment-queue`, { headers: { cookie: session.cookie, origin: app.url } });

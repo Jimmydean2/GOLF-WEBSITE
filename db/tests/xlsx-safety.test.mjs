@@ -47,7 +47,7 @@ const outPath = join(dir, "roster.xlsx");
 try {
   console.log("=== 1. Formula-injection-shaped fields must stay inert text ===");
   await reserveOk("xlsx", {
-    weekIds: ["jun22"],
+    weekIds: ["2027-06-21"],
     parentName: PAYLOADS.parentName,
     secondaryPhone: PAYLOADS.secondaryPhone,
     emergencyName: PAYLOADS.emergencyName,
@@ -55,7 +55,7 @@ try {
   });
 
   const wb2 = await loadWorkbook(outPath);
-  const ws = wb2.getWorksheet("Jun 22-26");
+  const ws = wb2.getWorksheet("Jun 21-25");
   const dataRow = ws.getRow(8); // first data row (header is row 7)
   const nameCell = dataRow.getCell(2); // Child's Full Name
   const healthCell = dataRow.getCell(9); // Allergies / Medical Notes
@@ -77,7 +77,7 @@ try {
   check("child-name payload appears verbatim (XML-escaped) inside a <t> text node", sharedStrings.includes(`<t>${xmlEscape(PAYLOADS.fullName)}</t>`));
   check("health-info payload appears verbatim (XML-escaped) inside a <t> text node", sharedStrings.includes(`<t>${xmlEscape(PAYLOADS.healthInfo)}</t>`));
 
-  // The cover sheet is always sheet1 (buildCoverSheet runs first); jun22 is the first week in
+  // The cover sheet is always sheet1 (buildCoverSheet runs first); 2027-06-21 is the first week in
   // content.ts's juniorCamps.weeks, so its tab is sheet2.
   const jun22Sheet = execFileSync("unzip", ["-p", outPath, "xl/worksheets/sheet2.xml"]).toString();
   const cellMatch = jun22Sheet.match(/<c r="B8"[^>]*>/);
@@ -87,19 +87,19 @@ try {
 
   // French names: accents and apostrophes must reach the printed roster intact.
   await reserveOk("accents", {
-    weekIds: ["aug17"],
+    weekIds: ["2027-08-16"],
     parentName: "Chantal Côté-Tremblay",
     children: [{ fullName: "Émilie Côté-Bélanger", dateOfBirth: "2016-02-02", age: "10", healthInfo: "allergie aux arachides; EpiPen à l'école" }],
   });
   const wbAccents = await loadWorkbook(outPath);
-  const accentSheet = wbAccents.getWorksheet("Aug 17-20");
+  const accentSheet = wbAccents.getWorksheet("Aug 16-19");
   check("accented French names and health notes appear in the roster exactly as written",
     accentSheet.getRow(8).getCell(2).value === "Émilie Côté-Bélanger" && accentSheet.getRow(8).getCell(9).value === "allergie aux arachides; EpiPen à l'école",
     `${accentSheet.getRow(8).getCell(2).value} / ${accentSheet.getRow(8).getCell(9).value}`);
 
   // ---------------------------------------------------------------------------
   console.log("\n=== 2. The Paid column, and who is listed ===");
-  const mk = (name, extra = {}) => reserveOk(name, { weekIds: ["jun29"], children: [{ fullName: name, dateOfBirth: "2017-01-01", age: "9", healthInfo: "none" }], ...extra });
+  const mk = (name, extra = {}) => reserveOk(name, { weekIds: ["2027-06-28"], children: [{ fullName: name, dateOfBirth: "2017-01-01", age: "9", healthInfo: "none" }], ...extra });
   const paidId = await mk("Aa Paid Child");
   const reportedId = await mk("Bb Reported Child");
   await mk("Cc Pending Child"); // stays Awaiting Payment
@@ -112,7 +112,7 @@ try {
   await campDb.releaseExpiredReservations();
 
   const wb3 = await loadWorkbook(outPath);
-  const sheet = wb3.getWorksheet("Jun 29-Jul 3");
+  const sheet = wb3.getWorksheet("Jun 28-Jul 2");
   const rows = [];
   for (let r = 8; r <= 37; r++) {
     const name = sheet.getRow(r).getCell(2).value;
@@ -124,17 +124,17 @@ try {
 
   // ---------------------------------------------------------------------------
   console.log("\n=== 3. A week authorized above 30 prints every child ===");
-  const normal = wb3.getWorksheet("Jul 13-16");
+  const normal = wb3.getWorksheet("Jul 12-15");
   check("an ordinary week still has the 30 numbered rows (row 37 is number 30; row 38 is empty)", normal.getRow(37).getCell(1).value === 30 && !normal.getRow(38).getCell(1).value);
   check("...and says 'Max 30 campers'", String(normal.getCell("A3").value).includes("Max 30 campers"));
 
-  const auth = await campDb.authorizeWeekCapacity("jul06", 33, "Extra coach confirmed; families on the waiting list");
-  check("setup: the administrator authorizes 33 for Jul 6-9", auth.ok);
-  for (let i = 0; i < 11; i++) await reserveOk(`big-${i}`, { weekIds: ["jul06"], children: Array.from({ length: 3 }, (_, k) => ({ fullName: `Big${String(i).padStart(2, "0")} Kid${k + 1}`, dateOfBirth: "2016-01-01", age: "10", healthInfo: "none" })) });
-  check("setup: the week now holds 33 children", (await pool.query(`SELECT taken_count FROM camp_weeks WHERE id='jul06'`)).rows[0].taken_count === 33);
+  const auth = await campDb.authorizeWeekCapacity("2027-07-05", 33, "Extra coach confirmed; families on the waiting list");
+  check("setup: the administrator authorizes 33 for Jul 5-8", auth.ok);
+  for (let i = 0; i < 11; i++) await reserveOk(`big-${i}`, { weekIds: ["2027-07-05"], children: Array.from({ length: 3 }, (_, k) => ({ fullName: `Big${String(i).padStart(2, "0")} Kid${k + 1}`, dateOfBirth: "2016-01-01", age: "10", healthInfo: "none" })) });
+  check("setup: the week now holds 33 children", (await pool.query(`SELECT taken_count FROM camp_weeks WHERE id='2027-07-05'`)).rows[0].taken_count === 33);
 
   const wb4 = await loadWorkbook(outPath);
-  const big = wb4.getWorksheet("Jul 6-9");
+  const big = wb4.getWorksheet("Jul 5-8");
   const names = [];
   for (let r = 8; r <= 8 + 40; r++) {
     const v = big.getRow(r).getCell(2).value;

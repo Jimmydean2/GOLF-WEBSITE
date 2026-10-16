@@ -30,7 +30,7 @@ console.log("=== 1. A reservation: reference, amount due, and a 12-hour hold ===
 {
   await resetAll();
   const before = Date.now();
-  const basicInput = input("basic", { children: kids(2, "B"), weekIds: ["jul13", "jul20"] });
+  const basicInput = input("basic", { children: kids(2, "B"), weekIds: ["2027-07-12", "2027-07-19"] });
   const r = await reserveRegistration(basicInput);
   check("reservation succeeds", r.ok);
   check("the reference looks like GD-XXXXXX with no look-alike characters", /^GD-[A-HJ-NP-Z2-9]{6}$/.test(r.reference), r.reference);
@@ -46,7 +46,7 @@ console.log("=== 1. A reservation: reference, amount due, and a 12-hour hold ===
   check("the same key from a different email is refused: it does not return another family's reservation", !borrowed.ok && borrowed.reason === "idempotency_conflict");
 
   // Spread over several weeks so no week reaches its 30-child limit while we count references.
-  const spread = ["jun22", "jun29", "jul06", "jul13", "jul20", "jul27", "aug03", "aug10"];
+  const spread = ["2027-06-21", "2027-06-28", "2027-07-05", "2027-07-12", "2027-07-19", "2027-07-26", "2027-08-02", "2027-08-09"];
   const refs = new Set();
   let okCount = 0;
   for (let i = 0; i < 40; i++) {
@@ -63,7 +63,7 @@ console.log("=== 1. A reservation: reference, amount due, and a 12-hour hold ===
 console.log("\n=== 2. The 12-hour release happens exactly at the boundary, and only for unreported reservations ===");
 {
   await resetAll();
-  const id = await reserveOk("edge", { weekIds: ["jul06"] });
+  const id = await reserveOk("edge", { weekIds: ["2027-07-05"] });
   const H = new Date((await reg(id)).hold_expires_at);
   const early = await releaseExpiredReservations(new Date(H.getTime() - 1000));
   const exact = await releaseExpiredReservations(H);
@@ -71,13 +71,13 @@ console.log("\n=== 2. The 12-hour release happens exactly at the boundary, and o
   check("exactly at the hold's end: still held (a report at that instant is still accepted)", exact.releasedRegistrationIds.length === 0);
   const late = await releaseExpiredReservations(new Date(H.getTime() + 1000));
   const r = await reg(id);
-  check("one second after: released atomically", late.releasedRegistrationIds.join() === id && r.status === "cancelled" && r.release_reason === "expired_unpaid" && r.spotsActive === 0 && (await week("jul06")).taken_count === 0);
+  check("one second after: released atomically", late.releasedRegistrationIds.join() === id && r.status === "cancelled" && r.release_reason === "expired_unpaid" && r.spotsActive === 0 && (await week("2027-07-05")).taken_count === 0);
   check("the release is audited as the system", (await auditFor(id)).some((a) => a.action === "release_expired" && a.actor === "system"));
   const again = await releaseExpiredReservations(new Date(H.getTime() + 5000));
-  check("running it again changes nothing (no double release, no negative counter)", again.releasedRegistrationIds.length === 0 && (await week("jul06")).taken_count === 0);
+  check("running it again changes nothing (no double release, no negative counter)", again.releasedRegistrationIds.length === 0 && (await week("2027-07-05")).taken_count === 0);
 
-  const a = await reserveOk("edge-a", { weekIds: ["jul06"] });
-  const b = await reserveOk("edge-b", { weekIds: ["jul06"] });
+  const a = await reserveOk("edge-a", { weekIds: ["2027-07-05"] });
+  const b = await reserveOk("edge-b", { weekIds: ["2027-07-05"] });
   const Ha = new Date((await reg(a)).hold_expires_at);
   const okReport = await reportPayment(a, Ha);
   const lateReport = await reportPayment(b, new Date(new Date((await reg(b)).hold_expires_at).getTime() + 1));
@@ -95,7 +95,7 @@ console.log("\n=== 2. The 12-hour release happens exactly at the boundary, and o
 console.log("\n=== 3. A parent's report: Payment Reported, a 48-hour review, and NOT proof of payment ===");
 {
   await resetAll();
-  const id = await reserveOk("report", { weekIds: ["jul06"] });
+  const id = await reserveOk("report", { weekIds: ["2027-07-05"] });
   const T = new Date();
   const res = await reportPayment(id, T);
   const r = await reg(id);
@@ -103,12 +103,12 @@ console.log("\n=== 3. A parent's report: Payment Reported, a 48-hour review, and
   check("status is Payment Reported, not Paid", r.status === "payment_reported" && r.paid_at === null && r.verified_at === null);
   check("the report time is recorded exactly", new Date(r.payment_reported_at).getTime() === T.getTime());
   check("the review is due exactly 48 hours after the report", new Date(r.review_due_at).getTime() === T.getTime() + 48 * HOUR);
-  check("the spot is still held", r.spotsActive === r.spotsTotal && (await week("jul06")).taken_count === 1);
+  check("the spot is still held", r.spotsActive === r.spotsTotal && (await week("2027-07-05")).taken_count === 1);
   const second = await reportPayment(id, new Date(T.getTime() + 3 * HOUR));
   check("a second report is accepted idempotently and changes nothing", second.ok && second.alreadyReported && new Date((await reg(id)).review_due_at).getTime() === T.getTime() + 48 * HOUR);
   check("the report is audited as the parent", (await auditFor(id)).filter((a) => a.action === "payment_reported" && a.actor === "parent").length === 1);
 
-  const paid = await reserveOk("report-paid", { weekIds: ["jul06"] });
+  const paid = await reserveOk("report-paid", { weekIds: ["2027-07-05"] });
   await confirmFor(paid);
   const onPaid = await reportPayment(paid);
   check("reporting an already-confirmed registration -> already_paid", !onPaid.ok && onPaid.reason === "already_paid");
@@ -147,9 +147,9 @@ console.log("\n=== 3b. Nothing but the administrator's Confirm can mark Paid (so
 console.log("\n=== 4. At 48 hours a reported payment is flagged overdue and is NEVER released by the system ===");
 {
   await resetAll();
-  const a = await reserveOk("ov-a", { weekIds: ["jul06"], children: kids(2, "OA") });
-  const b = await reserveOk("ov-b", { weekIds: ["jul06"] });
-  const c = await reserveOk("ov-c", { weekIds: ["jul06"] });
+  const a = await reserveOk("ov-a", { weekIds: ["2027-07-05"], children: kids(2, "OA") });
+  const b = await reserveOk("ov-b", { weekIds: ["2027-07-05"] });
+  const c = await reserveOk("ov-c", { weekIds: ["2027-07-05"] });
   await reportPayment(a);
   await reportPayment(b);
   await makeOverdue(a, 5);
@@ -163,18 +163,18 @@ console.log("\n=== 4. At 48 hours a reported payment is flagged overdue and is N
   const far = await releaseExpiredReservations(new Date(Date.now() + 30 * 24 * HOUR));
   check("thirty days later the automatic release still does not touch a reported payment", !far.releasedRegistrationIds.includes(a) && !far.releasedRegistrationIds.includes(b));
   check("...but the same sweep does release the reservation nobody reported (the 12-hour rule)", far.releasedRegistrationIds.includes(c) && (await reg(c)).release_reason === "expired_unpaid");
-  check("the overdue registrations are still Payment Reported and still hold every spot", (await reg(a)).status === "payment_reported" && (await reg(a)).spotsActive === 2 && (await reg(b)).status === "payment_reported" && (await week("jul06")).taken_count === 3);
+  check("the overdue registrations are still Payment Reported and still hold every spot", (await reg(a)).status === "payment_reported" && (await reg(a)).spotsActive === 2 && (await reg(b)).status === "payment_reported" && (await week("2027-07-05")).taken_count === 3);
 
   await makeOverdue(a, 240);
   const q2 = await getPaymentQueue();
   check("ten days overdue: still held, longest overdue grows, nothing released", q2.reported.find((i) => i.id === a).overdueHours === 240 && (await reg(a)).spotsActive === 2);
 
-  await fill("jul06", 27, "blocker"); // 3 held by the overdue claims + 27 = 30
-  check("setup: the week is full, counting the spots the overdue claims hold", (await week("jul06")).taken_count === 30);
-  const blocked = await reserveRegistration(input("blocked", { weekIds: ["jul06"] }));
+  await fill("2027-07-05", 27, "blocker"); // 3 held by the overdue claims + 27 = 30
+  check("setup: the week is full, counting the spots the overdue claims hold", (await week("2027-07-05")).taken_count === 30);
+  const blocked = await reserveRegistration(input("blocked", { weekIds: ["2027-07-05"] }));
   check("another family cannot take a spot an overdue claim is holding", !blocked.ok && blocked.reason === "weeks_full");
   const released = await cancelRegistration(b, "no deposit found", { releaseReason: "not_received" });
-  const now = await reserveRegistration(input("takes-freed", { weekIds: ["jul06"] }));
+  const now = await reserveRegistration(input("takes-freed", { weekIds: ["2027-07-05"] }));
   check("only the administrator's release frees it, and then it can be taken", released.ok && now.ok);
   await invariants("overdue claims");
 }
@@ -183,7 +183,7 @@ console.log("\n=== 4. At 48 hours a reported payment is flagged overdue and is N
 console.log("\n=== 5. Time-limited extensions ===");
 {
   await resetAll();
-  const id = await reserveOk("ext", { weekIds: ["jul13"] });
+  const id = await reserveOk("ext", { weekIds: ["2027-07-12"] });
   const pending = await grantReviewExtension(id, { hours: 24, note: "bank shows the transfer as pending" });
   check("an extension needs a reported payment", !pending.ok && pending.reason === "not_reported");
   await reportPayment(id);
@@ -225,14 +225,14 @@ console.log("\n=== 6. False payment reports ===");
 {
   await resetAll();
   const email = "falsereporter@example.test";
-  const mk = (label, overrides = {}) => reserveOk(label, { email, primaryPhone: "514-555-0199", weekIds: ["jul13"], ...overrides });
+  const mk = (label, overrides = {}) => reserveOk(label, { email, primaryPhone: "514-555-0199", weekIds: ["2027-07-12"], ...overrides });
 
   const r1 = await mk("fr1");
   await reportPayment(r1);
   check("a false report holds the spot (the system cannot know it is false)", (await reg(r1)).status === "payment_reported" && (await reg(r1)).spotsActive === 1);
   const rel1 = await cancelRegistration(r1, "no deposit found", { releaseReason: "not_received" });
   const strikes1 = (await pool.query(`SELECT count(*)::int AS n FROM contact_strikes`)).rows[0].n;
-  check("the administrator releases it as 'payment not received': spot freed, one strike recorded", rel1.ok && (await week("jul13")).taken_count === 0 && strikes1 === 1);
+  check("the administrator releases it as 'payment not received': spot freed, one strike recorded", rel1.ok && (await week("2027-07-12")).taken_count === 0 && strikes1 === 1);
   check("the strike is audited", (await auditFor(r1)).some((a) => a.action === "cancel_registration" && a.details.strike === true));
 
   const r2 = await mk("fr2");
@@ -248,7 +248,7 @@ console.log("\n=== 6. False payment reports ===");
   const rel = await releaseExpiredReservations();
   check("and the unreported reservation is released on time", rel.releasedRegistrationIds.includes(r3));
 
-  const r4 = await reserveOk("fr4", { email: "other-address@example.test", primaryPhone: "(514) 555-0199", weekIds: ["jul13"] });
+  const r4 = await reserveOk("fr4", { email: "other-address@example.test", primaryPhone: "(514) 555-0199", weekIds: ["2027-07-12"] });
   const byPhone = await reportPayment(r4);
   check("the same phone number under another email and formatting is recognised", !byPhone.ok && byPhone.reason === "report_unavailable");
 
@@ -258,12 +258,12 @@ console.log("\n=== 6. False payment reports ===");
   check("strikes older than 30 days no longer count", after.ok);
   await cancelRegistration(r5, "cleanup", { releaseReason: "owner_cancelled" });
 
-  const plain = await reserveOk("fr6", { email: "plain@example.test", primaryPhone: "514-555-0777", weekIds: ["jul13"] });
+  const plain = await reserveOk("fr6", { email: "plain@example.test", primaryPhone: "514-555-0777", weekIds: ["2027-07-12"] });
   await cancelRegistration(plain, "no report was made", { releaseReason: "not_received" });
   const strikeCount = (await pool.query(`SELECT count(*)::int AS n FROM contact_strikes WHERE registration_id=$1`, [plain])).rows[0].n;
   check("releasing an UNREPORTED reservation, or a plain cancel, adds no strike", strikeCount === 0);
 
-  const genuine = await reserveOk("fr7", { email: "genuine@example.test", primaryPhone: "514-555-0888", weekIds: ["jul13"] });
+  const genuine = await reserveOk("fr7", { email: "genuine@example.test", primaryPhone: "514-555-0888", weekIds: ["2027-07-12"] });
   await reportPayment(genuine);
   await cancelRegistration(genuine, "could not find it", { releaseReason: "not_received" });
   check("setup: a strike exists for the genuine payer", (await pool.query(`SELECT count(*)::int AS n FROM contact_strikes WHERE registration_id=$1`, [genuine])).rows[0].n === 1);
@@ -277,17 +277,17 @@ console.log("\n=== 6b. Limits on unpaid reservations per family ===");
   await resetAll();
   const email = "cap@example.test";
   const results = [];
-  for (let i = 0; i < 9; i++) results.push(await reserveRegistration(input(`cap${i}`, { email, primaryPhone: `514-555-02${10 + i}`, weekIds: ["aug03"] })));
+  for (let i = 0; i < 9; i++) results.push(await reserveRegistration(input(`cap${i}`, { email, primaryPhone: `514-555-02${10 + i}`, weekIds: ["2027-08-02"] })));
   check("8 open reservations are allowed", results.slice(0, 8).every((r) => r.ok));
   check("the 9th is refused (too_many_open)", !results[8].ok && results[8].reason === "too_many_open");
-  const byPhone = await reserveRegistration(input("cap-phone", { email: "different@example.test", primaryPhone: "514-555-0210", weekIds: ["aug03"] }));
+  const byPhone = await reserveRegistration(input("cap-phone", { email: "different@example.test", primaryPhone: "514-555-0210", weekIds: ["2027-08-02"] }));
   check("the same family is recognised by phone number too (different email)", byPhone.ok === true || byPhone.reason === "too_many_open");
   await cancelRegistration(results[0].registrationId, "freed one");
-  const again = await reserveRegistration(input("cap-again", { email, primaryPhone: "514-555-0299", weekIds: ["aug03"] }));
+  const again = await reserveRegistration(input("cap-again", { email, primaryPhone: "514-555-0299", weekIds: ["2027-08-02"] }));
   check("releasing one makes room for another", again.ok);
 
   await resetAll();
-  const burst = await Promise.all(Array.from({ length: 14 }, (_, i) => reserveRegistration(input(`burst${i}`, { email: "burst@example.test", primaryPhone: `514-555-03${10 + i}`, weekIds: ["aug10"] }))));
+  const burst = await Promise.all(Array.from({ length: 14 }, (_, i) => reserveRegistration(input(`burst${i}`, { email: "burst@example.test", primaryPhone: `514-555-03${10 + i}`, weekIds: ["2027-08-09"] }))));
   const okCount = burst.filter((r) => r.ok).length;
   check("14 simultaneous submissions from one family: no more than 8 get through (the family is serialized)", okCount === 8, `${okCount} ok`);
   await invariants("per-family cap");
@@ -297,7 +297,7 @@ console.log("\n=== 6b. Limits on unpaid reservations per family ===");
 console.log("\n=== 7. Reinstatement is bounded ===");
 {
   await resetAll();
-  const id = await reserveOk("rein", { weekIds: ["jul06"] });
+  const id = await reserveOk("rein", { weekIds: ["2027-07-05"] });
   const notReleased = await reinstateRegistration(id);
   check("reinstating a registration that is not released -> not_released", !notReleased.ok && notReleased.reason === "not_released");
 
@@ -316,7 +316,7 @@ console.log("\n=== 7. Reinstatement is bounded ===");
   const third = await reinstateRegistration(id);
   check("a third reinstatement is refused (too_many_reinstatements)", !third.ok && third.reason === "too_many_reinstatements" && !r3.ok);
 
-  const claim = await reserveOk("rein-claim", { weekIds: ["jul13"], children: kids(2, "RC") });
+  const claim = await reserveOk("rein-claim", { weekIds: ["2027-07-12"], children: kids(2, "RC") });
   await reportPayment(claim);
   await cancelRegistration(claim, "no deposit found", { releaseReason: "not_received" });
   const back = await reinstateRegistration(claim);
@@ -324,13 +324,13 @@ console.log("\n=== 7. Reinstatement is bounded ===");
   check("a released REPORTED claim comes back as Payment Reported with a new 48-hour review", back.ok && c.status === "payment_reported" && near(c.review_due_at, Date.now() + 48 * HOUR) && c.hold_expires_at === null && c.spotsActive === 2);
   check("and it is audited", (await auditFor(claim)).some((x) => x.action === "reinstate_registration" && x.details.backToStatus === "payment_reported"));
 
-  const closed = await reserveOk("rein-closed", { weekIds: ["aug17"] });
+  const closed = await reserveOk("rein-closed", { weekIds: ["2027-08-16"] });
   await cancelRegistration(closed, "x");
-  await pool.query(`UPDATE camp_weeks SET is_open=false WHERE id='aug17'`);
+  await pool.query(`UPDATE camp_weeks SET is_open=false WHERE id='2027-08-16'`);
   const refusedClosed = await reinstateRegistration(closed);
   const refusedConfirm = await confirmFor(closed);
   check("a closed week blocks both Reinstate and Confirm and changes nothing", !refusedClosed.ok && refusedClosed.reason === "weeks_closed" && !refusedConfirm.ok && refusedConfirm.reason === "weeks_closed" && (await reg(closed)).spotsActive === 0);
-  await pool.query(`UPDATE camp_weeks SET is_open=true WHERE id='aug17'`);
+  await pool.query(`UPDATE camp_weeks SET is_open=true WHERE id='2027-08-16'`);
   await invariants("reinstatement");
 }
 
@@ -339,44 +339,44 @@ console.log("\n=== 8. Delayed and late deposits ===");
 {
   await resetAll();
   // a) deposit arrives during the 48-hour review
-  const during = await reserveOk("dl-during", { weekIds: ["jul06"] });
+  const during = await reserveOk("dl-during", { weekIds: ["2027-07-05"] });
   await reportPayment(during);
   const c1 = await confirmFor(during);
   check("a deposit confirmed during the review: Paid, on time", c1.ok && c1.paidOnTime && (await reg(during)).status === "paid");
 
   // b) deposit confirmed after the review is overdue
-  const overdue = await reserveOk("dl-overdue", { weekIds: ["jul06"] });
+  const overdue = await reserveOk("dl-overdue", { weekIds: ["2027-07-05"] });
   await reportPayment(overdue);
   await makeOverdue(overdue, 30);
   const c2 = await confirmFor(overdue);
   check("a deposit confirmed while OVERDUE: Paid, spot never lost", c2.ok && (await reg(overdue)).status === "paid" && (await reg(overdue)).spotsActive === 1);
 
   // c) confirmed after an extension
-  const extended = await reserveOk("dl-ext", { weekIds: ["jul06"] });
+  const extended = await reserveOk("dl-ext", { weekIds: ["2027-07-05"] });
   await reportPayment(extended);
   await grantReviewExtension(extended, { hours: 48, note: "bank security review" });
   const c3 = await confirmFor(extended);
   check("a deposit confirmed after an extension: Paid", c3.ok && (await reg(extended)).status === "paid");
 
   // d) unreported, 12-hour release, deposit found afterwards, with room
-  const lateRoom = await reserveOk("dl-room", { weekIds: ["jul13"] });
+  const lateRoom = await reserveOk("dl-room", { weekIds: ["2027-07-12"] });
   const endOfHold = new Date((await reg(lateRoom)).hold_ends_at_initial);
   await expireHold(lateRoom, 3);
   await releaseExpiredReservations();
   const c4 = await confirmFor(lateRoom, { depositAt: new Date(endOfHold.getTime() - 3600_000 > Date.now() - 1000 ? Date.now() : endOfHold.getTime() - 3600_000) });
-  check("released after 12 hours, deposit found later, with room: spot re-taken and Paid", c4.ok && c4.reinstatedWeekIds.join() === "jul13" && (await reg(lateRoom)).status === "paid" && (await reg(lateRoom)).spotsActive === 1);
+  check("released after 12 hours, deposit found later, with room: spot re-taken and Paid", c4.ok && c4.reinstatedWeekIds.join() === "2027-07-12" && (await reg(lateRoom)).status === "paid" && (await reg(lateRoom)).spotsActive === 1);
   check("a deposit dated before the original hold ended is recorded as paid on time (the family forgot the button)", c4.paidOnTime === true && (await reg(lateRoom)).paid_on_time === true);
 
   // e) the same, but the week filled
-  const lateFull = await reserveOk("dl-full", { weekIds: ["aug24"] });
+  const lateFull = await reserveOk("dl-full", { weekIds: ["2027-08-23"] });
   await expireHold(lateFull, 3);
   await releaseExpiredReservations();
-  await fill("aug24", 30, "taker");
+  await fill("2027-08-23", 30, "taker");
   const c5 = await confirmFor(lateFull);
-  check("with the week full: refused, nothing changes, the on-time payer is flagged", !c5.ok && c5.reason === "weeks_full" && c5.paidOnTime === true && (await reg(lateFull)).status === "cancelled" && (await week("aug24")).taken_count === 30);
+  check("with the week full: refused, nothing changes, the on-time payer is flagged", !c5.ok && c5.reason === "weeks_full" && c5.paidOnTime === true && (await reg(lateFull)).status === "cancelled" && (await week("2027-08-23")).taken_count === 30);
 
   // f) deposit time after the hold: late
-  const lateTime = await reserveOk("dl-lateflag", { weekIds: ["aug10"] });
+  const lateTime = await reserveOk("dl-lateflag", { weekIds: ["2027-08-09"] });
   await pool.query(`UPDATE registrations SET hold_expires_at = now() - interval '5 hours' WHERE id=$1`, [lateTime]);
   await releaseExpiredReservations();
   await pool.query(`UPDATE registrations SET created_at = created_at WHERE id=$1`, [lateTime]).catch(() => {});
@@ -384,14 +384,14 @@ console.log("\n=== 8. Delayed and late deposits ===");
   check("a deposit made after the original hold ended is recorded as late", c6.ok && typeof c6.paidOnTime === "boolean");
 
   // g) an administrator-released claim whose deposit appears later
-  const nr = await reserveOk("dl-nr", { weekIds: ["aug17"] });
+  const nr = await reserveOk("dl-nr", { weekIds: ["2027-08-16"] });
   await reportPayment(nr);
   await cancelRegistration(nr, "no deposit found", { releaseReason: "not_received" });
   const c7 = await confirmFor(nr);
   check("a claim released as 'not received' whose deposit appears later: confirmed with room", c7.ok && (await reg(nr)).status === "paid");
 
   // h) amounts
-  const amt = await reserveOk("dl-amt", { weekIds: ["aug17"] });
+  const amt = await reserveOk("dl-amt", { weekIds: ["2027-08-16"] });
   await reportPayment(amt);
   const due = (await reg(amt)).amount_due_cents;
   const short = await confirmFor(amt, { amountReceivedCents: due - 500 });
@@ -408,18 +408,18 @@ console.log("\n=== 9. Settings: bounded, validated, and only for new clocks ==="
   check("out-of-range or non-numeric stored values fall back to the default", parseSettings([{ key: "holdHours", value: "999" }, { key: "reviewHours", value: "abc" }, { key: "strikeLimit", value: "3" }]).holdHours === 12 && parseSettings([{ key: "reviewHours", value: "abc" }]).reviewHours === 48 && parseSettings([{ key: "strikeLimit", value: "3" }]).strikeLimit === 3);
   check("validation rejects unknown keys and out-of-range values", validateSetting("holdHours", 49) !== null && validateSetting("nope", 1) !== null && validateSetting("holdHours", 24) === null && validateSetting("extensionMaxHours", 100) !== null);
 
-  const existing = await reserveOk("set-old", { weekIds: ["jul06"] });
+  const existing = await reserveOk("set-old", { weekIds: ["2027-07-05"] });
   const oldHold = (await reg(existing)).hold_expires_at;
   await pool.query(`INSERT INTO camp_settings (key, value) VALUES ('holdHours', '24'), ('reviewHours', '72')`);
   check("the setting is read from the database", (await getCampSettings()).holdHours === 24 && (await getCampSettings()).reviewHours === 72);
-  const fresh = await reserveRegistration(input("set-new", { weekIds: ["jul06"] }));
+  const fresh = await reserveRegistration(input("set-new", { weekIds: ["2027-07-05"] }));
   check("a NEW reservation gets the new hold", near(fresh.holdExpiresAt, Date.now() + 24 * HOUR + 15 * 60_000));
   check("an EXISTING reservation keeps the hold it was given", new Date((await reg(existing)).hold_expires_at).getTime() === new Date(oldHold).getTime());
-  const rep = await reserveOk("set-rep", { weekIds: ["jul06"] });
+  const rep = await reserveOk("set-rep", { weekIds: ["2027-07-05"] });
   await reportPayment(rep);
   check("the review length follows the setting for new reports", near((await reg(rep)).review_due_at, Date.now() + 72 * HOUR));
   await pool.query(`UPDATE camp_settings SET value='999' WHERE key='holdHours'`);
-  const bad = await reserveRegistration(input("set-bad", { weekIds: ["jul06"] }));
+  const bad = await reserveRegistration(input("set-bad", { weekIds: ["2027-07-05"] }));
   check("a bad stored value can never produce an unbounded clock (back to 12 hours)", near(bad.holdExpiresAt, Date.now() + 12 * HOUR + 15 * 60_000));
   await pool.query(`DELETE FROM camp_settings`);
   await invariants("settings");
@@ -431,7 +431,7 @@ console.log("\n=== 10. Concurrency around the clocks and the administrator's act
   await resetAll();
   let bad = 0;
   for (let i = 0; i < 25; i++) {
-    const id = await reserveOk(`rr${i}`, { weekIds: ["aug24"] });
+    const id = await reserveOk(`rr${i}`, { weekIds: ["2027-08-23"] });
     const T = new Date();
     await pool.query(`UPDATE registrations SET hold_expires_at = $2 WHERE id=$1`, [id, new Date(T.getTime() + 1000)]);
     await Promise.all([reportPayment(id, T), releaseExpiredReservations(new Date(T.getTime() + 5000))]);
@@ -447,7 +447,7 @@ console.log("\n=== 10. Concurrency around the clocks and the administrator's act
   await resetAll();
   bad = 0;
   for (let i = 0; i < 25; i++) {
-    const id = await reserveOk(`pr${i}`, { weekIds: ["aug24"] });
+    const id = await reserveOk(`pr${i}`, { weekIds: ["2027-08-23"] });
     await expireHold(id, 1);
     await Promise.all([confirmFor(id), releaseExpiredReservations()]);
     const r = await reg(id);
@@ -459,7 +459,7 @@ console.log("\n=== 10. Concurrency around the clocks and the administrator's act
   await resetAll();
   bad = 0;
   for (let i = 0; i < 25; i++) {
-    const id = await reserveOk(`xr${i}`, { weekIds: ["aug24"] });
+    const id = await reserveOk(`xr${i}`, { weekIds: ["2027-08-23"] });
     await reportPayment(id);
     await makeOverdue(id, 3);
     await Promise.all([grantReviewExtension(id, { hours: 24, note: "racing the release" }), cancelRegistration(id, "release", { releaseReason: "not_received" })]);
@@ -472,7 +472,7 @@ console.log("\n=== 10. Concurrency around the clocks and the administrator's act
   await invariants("extension vs release");
 
   await resetAll();
-  const id = await reserveOk("twice", { weekIds: ["jul06"] });
+  const id = await reserveOk("twice", { weekIds: ["2027-07-05"] });
   const [r1, r2] = await Promise.all([reportPayment(id), reportPayment(id)]);
   check("two simultaneous reports: both accepted, exactly one actually reported", r1.ok && r2.ok && [r1, r2].filter((r) => !r.alreadyReported).length === 1);
   const [c1, c2] = await Promise.all([confirmFor(id), confirmFor(id)]);
@@ -485,7 +485,7 @@ console.log("\n=== 10. Concurrency around the clocks and the administrator's act
 console.log("\n=== 11. Multiple children across multiple weeks, through the whole policy ===");
 {
   await resetAll();
-  const weeks3 = ["jul13", "jul20", "jul27"];
+  const weeks3 = ["2027-07-12", "2027-07-19", "2027-07-26"];
   const fam = await reserveOk("mc", { children: kids(3, "MC"), weekIds: weeks3 });
   check("3 children x 3 weeks = 9 spots, 3 in each week", (await reg(fam)).spotsActive === 9 && (await Promise.all(weeks3.map((w) => week(w)))).every((w) => w.taken_count === 3));
   await reportPayment(fam);
@@ -496,18 +496,18 @@ console.log("\n=== 11. Multiple children across multiple weeks, through the whol
   check("an extension moves the review time but leaves all 9 spots held", ext.ok && (await reg(fam)).spotsActive === 9);
   const rel = await cancelRegistration(fam, "no deposit found", { releaseReason: "not_received" });
   check("an administrator's release frees all 9 spots in all 3 weeks at once", rel.releasedWeekIds.join() === weeks3.join() && (await Promise.all(weeks3.map((w) => week(w)))).every((w) => w.taken_count === 0));
-  await fill("jul20", 28, "mc-fill");
+  await fill("2027-07-19", 28, "mc-fill");
   const partial = await reinstateRegistration(fam);
-  check("with only 2 seats left in jul20 (3 needed), the reinstatement is refused for ALL weeks", !partial.ok && partial.reason === "weeks_full" && (await Promise.all(["jul13", "jul27"].map((w) => week(w)))).every((w) => w.taken_count === 0));
+  check("with only 2 seats left in 2027-07-19 (3 needed), the reinstatement is refused for ALL weeks", !partial.ok && partial.reason === "weeks_full" && (await Promise.all(["2027-07-12", "2027-07-26"].map((w) => week(w)))).every((w) => w.taken_count === 0));
   const paidAttempt = await confirmFor(fam);
   check("a verified late deposit is refused the same way and records that nothing changed", !paidAttempt.ok && paidAttempt.reason === "weeks_full" && (await reg(fam)).spotsActive === 0 && (await reg(fam)).status === "cancelled");
   await invariants("multi-child lifecycle");
 
   await resetAll();
-  const two = await reserveOk("mc2", { children: kids(2, "MT"), weekIds: ["aug03", "aug10"] });
+  const two = await reserveOk("mc2", { children: kids(2, "MT"), weekIds: ["2027-08-02", "2027-08-09"] });
   await expireHold(two);
   const exp = await releaseExpiredReservations();
-  check("an unreported 2-child, 2-week reservation expires: all 4 spots released together", exp.releasedRegistrationIds.join() === two && (await week("aug03")).taken_count === 0 && (await week("aug10")).taken_count === 0);
+  check("an unreported 2-child, 2-week reservation expires: all 4 spots released together", exp.releasedRegistrationIds.join() === two && (await week("2027-08-02")).taken_count === 0 && (await week("2027-08-09")).taken_count === 0);
   const late = await confirmFor(two);
   check("its late deposit restores all 4 spots and marks it Paid", late.ok && (await reg(two)).spotsActive === 4 && (await reg(two)).status === "paid");
   await invariants("multi-child expiry and late payment");

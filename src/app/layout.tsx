@@ -6,6 +6,8 @@ import Footer from "@/components/Footer";
 import JuniorCampsPromo from "@/components/JuniorCampsPromo";
 import ScrollToTop from "@/components/ScrollToTop";
 import { business } from "@/lib/content";
+import { season } from "@/lib/season";
+import { configuredOpensAt, isSeasonPublic } from "@/lib/registrationWindow";
 
 const playfair = Playfair_Display({
   variable: "--font-playfair",
@@ -25,6 +27,11 @@ export const metadata: Metadata = {
     "Private golf lessons, group clinics, and junior programs in Montreal with CPGA professional Coach James. Summer sessions at Golf Dorval, winter sessions at Royal Westcourt.",
 };
 
+function configuredOpensAtIso(): string | null {
+  const opens = configuredOpensAt();
+  return opens.ok ? opens.iso : null;
+}
+
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html
@@ -36,7 +43,9 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         <Navbar />
         <main className="flex-1">{children}</main>
         <Footer />
-        <JuniorCampsPromo />
+        {/* Decided when the site is built: a draft calendar shows no advert at all, and the
+            wording follows the opening moment. The form and the endpoint decide for real. */}
+        <JuniorCampsPromo year={season.year} show={isSeasonPublic() && configuredOpensAt().ok} opensAt={configuredOpensAtIso()} />
       </body>
     </html>
   );

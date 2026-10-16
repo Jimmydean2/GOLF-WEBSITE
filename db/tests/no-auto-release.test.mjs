@@ -26,7 +26,7 @@ const h = createHarness();
 const { pool, campDb, check, resetAll, reserveOk, confirmFor, makeOverdue, invariants } = h;
 
 const ORIGIN = "https://camp.example.test";
-const ALL_WEEKS = ["jun22", "jun29", "jul06", "jul13", "jul20", "jul27", "aug03", "aug10", "aug17", "aug24"];
+const ALL_WEEKS = ["2027-06-21", "2027-06-28", "2027-07-05", "2027-07-12", "2027-07-19", "2027-07-26", "2027-08-02", "2027-08-09", "2027-08-16", "2027-08-23"];
 const HOUR = 3_600_000;
 const DAY = 24 * HOUR;
 
@@ -80,7 +80,7 @@ console.log("\n=== 2. Ten days away: every automatic entry point, run over and o
   await pool.query(`DELETE FROM job_runs`);
   await pool.query(`DELETE FROM alert_ledger`);
   const reportedIds = [];
-  const weeks = ["jul06", "jul13", "jul20", "jul27", "aug03"];
+  const weeks = ["2027-07-05", "2027-07-12", "2027-07-19", "2027-07-26", "2027-08-02"];
   for (let i = 0; i < 20; i++) reportedIds.push(await reserveOk(`away${i}`, { email: `away${i}@example.test`, weekIds: [weeks[i % 5]], children: [{ fullName: `Away Kid ${i}`, dateOfBirth: "2017-01-01", age: "9", healthInfo: "none" }] }));
   const silentIds = [];
   for (let i = 0; i < 5; i++) silentIds.push(await reserveOk(`silent${i}`, { email: `silent${i}@example.test`, weekIds: [weeks[i % 5]] }));
@@ -99,7 +99,7 @@ console.log("\n=== 2. Ten days away: every automatic entry point, run over and o
   const record = (label, fn) => hits.push([label, fn]);
   record("a page that lists the weeks (capacity)", () => campDb.getCampWeeks());
   record("a parent opening their reservation page", () => campDb.getRegistrationById(reportedIds[0]));
-  record("another family trying to register", () => campDb.reserveRegistration(h.input("newcomer", { weekIds: ["aug10"] })));
+  record("another family trying to register", () => campDb.reserveRegistration(h.input("newcomer", { weekIds: ["2027-08-09"] })));
   record("the administrator's queue", () => campDb.getPaymentQueue());
   record("the scheduled check", () => runScheduledCheck({ source: "cron", origin: ORIGIN, send, adminEmails: ["owner@example.test"] }));
   record("the traffic fallback", () => maybeRunFromTraffic(ORIGIN, { send }));

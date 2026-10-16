@@ -99,7 +99,7 @@ console.log("\n=== 2. One reported payment, followed through every alert ===");
 {
   await resetAll();
   await clearLedger();
-  const { id, T0, DUE } = await reportedAndTimes("timeline", { weekIds: ["jul13"], parentName: "Timeline Parent" });
+  const { id, T0, DUE } = await reportedAndTimes("timeline", { weekIds: ["2027-07-12"], parentName: "Timeline Parent" });
   check("the review time is exactly 48 hours after the report", DUE - T0 === 48 * HOUR);
   const before = await snapshot(id);
   const m = mailer();
@@ -142,7 +142,7 @@ console.log("\n=== 3. An extension restarts the schedule ===");
 {
   await resetAll();
   await clearLedger();
-  const id = await reserveOk("ext", { weekIds: ["jul20"] });
+  const id = await reserveOk("ext", { weekIds: ["2027-07-19"] });
   await reportPayment(id);
   await makeOverdue(id, 5);
   const m = mailer();
@@ -169,13 +169,13 @@ console.log("\n=== 4. The administrator is away for a weekend ===");
   // Friday 18:00: a parent reports an e-Transfer. The administrator sees nothing until Monday 09:00.
   await resetAll();
   await clearLedger();
-  const A = await reserveOk("wk-A", { weekIds: ["jul27"], children: kids(2, "Wk"), parentName: "Weekend Family" });
-  const paid = await fill("jul27", 27, "wk-paid");
+  const A = await reserveOk("wk-A", { weekIds: ["2027-07-26"], children: kids(2, "Wk"), parentName: "Weekend Family" });
+  const paid = await fill("2027-07-26", 27, "wk-paid");
   for (const id of paid) await confirmFor(id);
-  const B = await reserveOk("wk-B", { weekIds: ["jul27"], parentName: "Unreported Family" });
+  const B = await reserveOk("wk-B", { weekIds: ["2027-07-26"], parentName: "Unreported Family" });
   const rowB0 = await reg(B);
-  check("Friday: the week is full (27 paid + 2 children awaiting + 1 unreported hold)", (await week("jul27")).taken_count === 30);
-  const full = await reserveRegistration(input("wk-C-early", { weekIds: ["jul27"] }));
+  check("Friday: the week is full (27 paid + 2 children awaiting + 1 unreported hold)", (await week("2027-07-26")).taken_count === 30);
+  const full = await reserveRegistration(input("wk-C-early", { weekIds: ["2027-07-26"] }));
   check("Friday: another family is told the week is full", !full.ok && full.reason === "weeks_full");
 
   await reportPayment(A);
@@ -194,8 +194,8 @@ console.log("\n=== 4. The administrator is away for a weekend ===");
     if (fresh.length) timeline.push(`${hour}h:${tiers(fresh)}`);
     if (hour === 13) {
       check("Saturday ~07:00: the family that never reported has been released by the 12-hour rule", run.released.includes(B) && (await reg(B)).status === "cancelled" && (await reg(B)).release_reason === "expired_unpaid");
-      cTook = await reserveRegistration(input("wk-C-takes-freed", { weekIds: ["jul27"] }));
-      check("...and its spot went to another family at once", cTook.ok && (await week("jul27")).taken_count === 30);
+      cTook = await reserveRegistration(input("wk-C-takes-freed", { weekIds: ["2027-07-26"] }));
+      check("...and its spot went to another family at once", cTook.ok && (await week("2027-07-26")).taken_count === 30);
       if (cTook.ok) await confirmFor(cTook.registrationId);
     }
     if (hour === 24 || hour === 47 || hour === 48 || hour === 60) {
@@ -227,7 +227,7 @@ console.log("\n=== 5. The administrator is away for TEN days ===");
 {
   await resetAll();
   await clearLedger();
-  const { id, T0 } = await reportedAndTimes("away10", { weekIds: ["aug03"], parentName: "Ten Day Family" });
+  const { id, T0 } = await reportedAndTimes("away10", { weekIds: ["2027-08-02"], parentName: "Ten Day Family" });
   const before = await snapshot(id);
   const m = mailer();
   await notifyPaymentReported(id, { dashboardUrl: DASH, send: m.send, adminEmails: ADMINS });
@@ -260,7 +260,7 @@ console.log("\n=== 6. Each alert is sent once, even with simultaneous runs, fail
   await clearLedger();
   const ids = [];
   for (let i = 0; i < 3; i++) {
-    const id = await reserveOk(`conc-${i}`, { weekIds: ["aug10"] });
+    const id = await reserveOk(`conc-${i}`, { weekIds: ["2027-08-09"] });
     await reportPayment(id);
     await makeOverdue(id, 5);
     ids.push(id);
@@ -312,7 +312,7 @@ console.log("\n=== 7. Who receives the alerts ===");
 
   await resetAll();
   await clearLedger();
-  const id = await reserveOk("recipients", { weekIds: ["jul06"] });
+  const id = await reserveOk("recipients", { weekIds: ["2027-07-05"] });
   await reportPayment(id);
   await makeOverdue(id, 1);
   const m = mailer();
@@ -327,7 +327,7 @@ console.log("\n=== 8. What the emails say (and do not say) ===");
   await resetAll();
   await clearLedger();
   const nasty = await reserveOk("nasty", {
-    weekIds: ["jul06"],
+    weekIds: ["2027-07-05"],
     parentName: `Evil <script>alert(1)</script> & "Quote"`,
     children: [{ fullName: `<img src=x onerror=alert(1)>`, dateOfBirth: "2018-01-01", age: "8", healthInfo: "none" }],
   });
@@ -348,7 +348,7 @@ console.log("\n=== 8. What the emails say (and do not say) ===");
   const everything = m.sent.map((x) => x.subject + x.html + x.text).join("\n");
   check("no email contains a parent's private link, a token, or any 'mark as paid' link", !/camp-registration\//i.test(everything) && !/token/i.test(everything) && !/mark[ -]?as[ -]?paid/i.test(everything) && !/\/confirm/i.test(everything));
 
-  const e2 = await reserveOk("tiers", { weekIds: ["jul06"] });
+  const e2 = await reserveOk("tiers", { weekIds: ["2027-07-05"] });
   await reportPayment(e2);
   const dueMs = new Date((await reg(e2)).review_due_at).getTime();
   const m2 = mailer();
@@ -365,11 +365,11 @@ console.log("\n=== 9. Releasing an unreported reservation queues the parent's no
   await resetAll();
   await clearLedger();
   await pool.query(`DELETE FROM email_outbox`);
-  const P = await reserveOk("notice-p", { weekIds: ["jul06"], parentName: "Pat Parent" });
-  const Q = await reserveOk("notice-q", { weekIds: ["jul06"] });
+  const P = await reserveOk("notice-p", { weekIds: ["2027-07-05"], parentName: "Pat Parent" });
+  const Q = await reserveOk("notice-q", { weekIds: ["2027-07-05"] });
   await reportPayment(Q);
   await cancelRegistration(Q, "no deposit found", { releaseReason: "not_received" });
-  const R = await reserveOk("notice-r", { weekIds: ["jul06"] });
+  const R = await reserveOk("notice-r", { weekIds: ["2027-07-05"] });
   await cancelRegistration(R, "family asked to cancel", { releaseReason: "owner_cancelled" });
   await expireHold(P, 1);
 
@@ -389,7 +389,7 @@ console.log("\n=== 10. No mail configured ===");
 {
   await resetAll();
   await clearLedger();
-  const stale = await reserveOk("no-mail", { weekIds: ["jul06"] });
+  const stale = await reserveOk("no-mail", { weekIds: ["2027-07-05"] });
   await expireHold(stale, 1);
   const none = await dispatchDueAlerts({ dashboardUrl: DASH });
   check("without email configured the dispatcher reports that it skipped sending", none.skipped === "email_not_configured");
@@ -401,9 +401,9 @@ console.log("\n=== 11. Alerts stop when the claim is resolved; they never resolv
 {
   await resetAll();
   await clearLedger();
-  const keep = await reportedAndTimes("resolve-keep", { weekIds: ["jul13"] });
-  const paid = await reportedAndTimes("resolve-paid", { weekIds: ["jul13"] });
-  const gone = await reportedAndTimes("resolve-gone", { weekIds: ["jul13"] });
+  const keep = await reportedAndTimes("resolve-keep", { weekIds: ["2027-07-12"] });
+  const paid = await reportedAndTimes("resolve-paid", { weekIds: ["2027-07-12"] });
+  const gone = await reportedAndTimes("resolve-gone", { weekIds: ["2027-07-12"] });
   await confirmFor(paid.id);
   await cancelRegistration(gone.id, "nothing found", { releaseReason: "not_received" });
   const m = mailer();
@@ -420,7 +420,7 @@ console.log("\n=== 12. A 'payment reported' email that could not be sent is sent
 {
   await resetAll();
   await clearLedger();
-  const missed = await reserveOk("missed-report", { weekIds: ["aug17"] });
+  const missed = await reserveOk("missed-report", { weekIds: ["2027-08-16"] });
   await reportPayment(missed);
   const mFail = mailer({ failOn: [1] });
   const first = await notifyPaymentReported(missed, { dashboardUrl: DASH, send: mFail.send, adminEmails: ADMINS });
@@ -434,7 +434,7 @@ console.log("\n=== 12. A 'payment reported' email that could not be sent is sent
   // A payment the administrators already heard about is not announced again later.
   await confirmFor(missed); // (settle the first one so only the new payment is in play)
   await clearLedger();
-  const told = await reserveOk("told-already", { weekIds: ["aug10"] });
+  const told = await reserveOk("told-already", { weekIds: ["2027-08-09"] });
   await reportPayment(told);
   const m2 = mailer();
   await notifyPaymentReported(told, { dashboardUrl: DASH, send: m2.send, adminEmails: ADMINS });
