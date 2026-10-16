@@ -8,7 +8,10 @@ import { getCampRosterData } from "@/lib/campRoster";
 import { isDatabaseConfigured } from "@/lib/db";
 import { getCampWeeks } from "@/lib/campDb";
 import AdminCampTools from "@/components/AdminCampTools";
+import AdminPaymentQueue from "@/components/AdminPaymentQueue";
+import { AdminActionsProvider } from "@/components/AdminActions";
 import AdminWeekEditor from "@/components/AdminWeekEditor";
+import AdminLogoutEverywhere from "@/components/AdminLogoutEverywhere";
 
 export const metadata: Metadata = {
   title: `Camp Rosters | ${business.name}`,
@@ -33,50 +36,57 @@ export default async function AdminCampRostersPage() {
   return (
     <div className="py-16 sm:py-24">
       <Container className="max-w-3xl">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <p className="font-display text-sm uppercase tracking-[0.3em] text-gold">Admin</p>
-            <h1 className="mt-2 font-display text-3xl font-semibold text-forest">
-              Junior Camp Rosters
-            </h1>
+        <AdminActionsProvider>
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <p className="font-display text-sm uppercase tracking-[0.3em] text-gold">Admin</p>
+              <h1 className="mt-2 font-display text-3xl font-semibold text-forest">
+                Junior Camp Rosters
+              </h1>
+            </div>
+            <div className="flex flex-col items-end gap-1">
+              <form action="/api/admin/logout" method="post">
+                <button
+                  type="submit"
+                  className="cursor-pointer text-sm font-semibold text-ink-soft hover:text-forest"
+                >
+                  Log out
+                </button>
+              </form>
+              {configured && <AdminLogoutEverywhere />}
+            </div>
           </div>
-          <form action="/api/admin/logout" method="post">
-            <button
-              type="submit"
-              className="cursor-pointer text-sm font-semibold text-ink-soft hover:text-forest"
-            >
-              Log out
-            </button>
-          </form>
-        </div>
 
-        {!configured ? (
-          <div className="mt-8 rounded-2xl border border-gold/30 bg-cream p-8 text-center">
-            <p className="text-ink-soft">
-              Registrations aren&apos;t connected yet, so there&apos;s nothing to pull a live
-              roster from. Once your database is set up (see BOOKING_SETUP.md), rosters
-              will populate here automatically.
-            </p>
-          </div>
-        ) : (
-          <>
-            <p className="mt-4 text-ink-soft">
-              {totalRegistered} camper{totalRegistered === 1 ? "" : "s"} registered across all
-              weeks. Download the full workbook below &mdash; one print-ready sheet per week,
-              auto-filled with every registration, always current.
-            </p>
+          {!configured ? (
+            <div className="mt-8 rounded-2xl border border-gold/30 bg-cream p-8 text-center">
+              <p className="text-ink-soft">
+                Registrations aren&apos;t connected yet, so there&apos;s nothing to pull a live
+                roster from. Once your database is set up (see BOOKING_SETUP.md), rosters
+                will populate here automatically.
+              </p>
+            </div>
+          ) : (
+            <>
+              <AdminPaymentQueue />
 
-            <a
-              href="/api/admin/camp-rosters/download"
-              className="mt-6 inline-flex cursor-pointer items-center justify-center gap-2 rounded-full bg-gradient-to-r from-gold-light via-gold to-gold-deep px-6 py-3 text-sm font-semibold text-ink shadow-md shadow-black/20 transition-all hover:shadow-lg hover:shadow-gold-deep/30"
-            >
-              Download Roster Workbook (.xlsx)
-            </a>
+              <p className="mt-8 text-ink-soft">
+                {totalRegistered} camper{totalRegistered === 1 ? "" : "s"} registered across all
+                weeks. Download the full workbook below &mdash; one print-ready sheet per week,
+                auto-filled with every registration, always current.
+              </p>
 
-            <AdminWeekEditor weeks={campWeeks} />
-            <AdminCampTools />
-          </>
-        )}
+              <a
+                href="/api/admin/camp-rosters/download"
+                className="mt-6 inline-flex cursor-pointer items-center justify-center gap-2 rounded-full bg-gradient-to-r from-gold-light via-gold to-gold-deep px-6 py-3 text-sm font-semibold text-ink shadow-md shadow-black/20 transition-all hover:shadow-lg hover:shadow-gold-deep/30"
+              >
+                Download Roster Workbook (.xlsx)
+              </a>
+
+              <AdminWeekEditor weeks={campWeeks} />
+              <AdminCampTools />
+            </>
+          )}
+        </AdminActionsProvider>
 
         <div className="mt-8 text-center">
           <Link href="/" className="text-sm font-semibold text-forest hover:underline">

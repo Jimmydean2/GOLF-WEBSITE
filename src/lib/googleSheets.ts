@@ -15,7 +15,7 @@ import { getGoogleAuth, isGoogleServiceAccountConfigured } from "./googleAuth";
 // CampRegistrations tab header (row 1): Timestamp | Parent Name | Email | Primary Phone | Secondary Phone |
 //   Child Name | Date of Birth | Child Age | Health/Medical Info | Emergency Contact Name |
 //   Emergency Contact Relationship | Emergency Contact Phone | Weeks | Code of Conduct Accepted |
-//   Consent Accepted | Registration ID | Paid | Paid At | Confirm Token
+//   Consent Accepted | Registration ID | Paid | Paid At | Reference
 //
 // "Weeks" holds one or more week IDs separated by commas (e.g. "jul06,jul13").
 // One row is appended per child (a family registering 3 kids for a week
@@ -69,7 +69,7 @@ export type CampRegistrationRow = {
   id: string;
   paid: string;
   paidAt: string;
-  confirmToken: string;
+  reference: string;
 };
 
 export function isGoogleSheetsConfigured(): boolean {
@@ -182,7 +182,7 @@ export async function appendCampRegistration(
           entry.id,
           "No",
           "",
-          entry.confirmToken,
+          entry.reference,
         ],
       ],
     },

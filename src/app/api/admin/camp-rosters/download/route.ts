@@ -1,14 +1,14 @@
 import { NextResponse } from "next/server";
-import { isAdminRequestAuthenticated } from "@/lib/adminAuth";
+import { requireAdmin } from "@/lib/adminAuth";
 import { buildCampRosterWorkbook } from "@/lib/campRoster";
-import { isGoogleSheetsConfigured } from "@/lib/googleSheets";
+import { isDatabaseConfigured } from "@/lib/db";
 
-export async function GET() {
-  if (!(await isAdminRequestAuthenticated())) {
-    return NextResponse.json({ error: "Not authorized." }, { status: 401 });
-  }
+export async function GET(request: Request) {
+  const guard = await requireAdmin(request);
+  if (!guard.ok) return guard.response;
 
-  if (!isGoogleSheetsConfigured()) {
+  // The roster is built from the Postgres registrations (not Google Sheets).
+  if (!isDatabaseConfigured()) {
     return NextResponse.json({ error: "Registrations aren't connected yet." }, { status: 503 });
   }
 

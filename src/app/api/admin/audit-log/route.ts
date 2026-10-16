@@ -1,12 +1,11 @@
 import { NextResponse } from "next/server";
-import { isAdminRequestAuthenticated } from "@/lib/adminAuth";
+import { requireAdmin } from "@/lib/adminAuth";
 import { isDatabaseConfigured } from "@/lib/db";
 import { getAuditLog } from "@/lib/campDb";
 
-export async function GET() {
-  if (!(await isAdminRequestAuthenticated())) {
-    return NextResponse.json({ error: "Not authorized." }, { status: 401 });
-  }
+export async function GET(request: Request) {
+  const guard = await requireAdmin(request);
+  if (!guard.ok) return guard.response;
   if (!isDatabaseConfigured()) {
     return NextResponse.json({ error: "Registrations aren't connected yet." }, { status: 503 });
   }

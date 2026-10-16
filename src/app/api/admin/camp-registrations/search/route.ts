@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { isAdminRequestAuthenticated } from "@/lib/adminAuth";
+import { requireAdmin } from "@/lib/adminAuth";
 import { isDatabaseConfigured } from "@/lib/db";
 import { searchRegistrations } from "@/lib/campDb";
 
@@ -7,9 +7,8 @@ import { searchRegistrations } from "@/lib/campDb";
 // independently of any admin page, not just hidden behind a client-side
 // password screen.
 export async function GET(request: Request) {
-  if (!(await isAdminRequestAuthenticated())) {
-    return NextResponse.json({ error: "Not authorized." }, { status: 401 });
-  }
+  const guard = await requireAdmin(request);
+  if (!guard.ok) return guard.response;
   if (!isDatabaseConfigured()) {
     return NextResponse.json({ error: "Registrations aren't connected yet." }, { status: 503 });
   }

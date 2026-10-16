@@ -13,7 +13,9 @@ export default function JuniorCampsPromo() {
   const [visible, setVisible] = useState(false);
 
   useEffect(() => {
-    if (pathname === "/junior-camps") return;
+    // Not on the registration page itself, and never on the administrators' screens or a
+    // parent's private payment page: a pop-up advert has no place beside a payment button.
+    if (pathname === "/junior-camps" || pathname?.startsWith("/admin") || pathname?.startsWith("/camp-registration")) return;
 
     let alreadySeen = false;
     try {

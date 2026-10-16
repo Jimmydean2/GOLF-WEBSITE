@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useAdminCall } from "./AdminActions";
 
 type Week = {
   id: string;
@@ -12,6 +13,7 @@ type Week = {
 };
 
 export default function AdminWeekEditor({ weeks }: { weeks: Week[] }) {
+  const call = useAdminCall();
   const [rows, setRows] = useState(weeks);
   const [savingId, setSavingId] = useState<string | null>(null);
   const [message, setMessage] = useState("");
@@ -21,20 +23,30 @@ export default function AdminWeekEditor({ weeks }: { weeks: Week[] }) {
   }
 
   async function save(week: Week) {
-    setSavingId(week.id);
     setMessage("");
+    // The standard limit is 30. Raising a week to 31, 32 or 33 is an authorization: it
+    // needs a reason, which is recorded, and the database refuses anything above 33.
+    let authorizationReason: string | undefined;
+    if (week.maxCapacity > 30) {
+      const reason = window.prompt(
+        `Raising ${week.label} to ${week.maxCapacity} children (the standard limit is 30; the most allowed is 33).\n\nWhy does this week need the extra spots? (at least 10 characters, saved in the log)`,
+        ""
+      );
+      if (!reason) {
+        setMessage("Capacity was not changed.");
+        return;
+      }
+      authorizationReason = reason;
+    }
+    setSavingId(week.id);
     try {
-      const res = await fetch(`/api/admin/camp-weeks/${week.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          maxCapacity: week.maxCapacity,
-          priceCents: week.priceCents,
-          isOpen: week.isOpen,
-        }),
-      });
-      const data = await res.json();
-      setMessage(res.ok && data.success ? `Saved ${week.label}.` : data.error || "Could not save.");
+      const result = await call(`/api/admin/camp-weeks/${week.id}`, {
+        maxCapacity: week.maxCapacity,
+        priceCents: week.priceCents,
+        isOpen: week.isOpen,
+        authorizationReason,
+      }, "PATCH");
+      setMessage(result.ok && result.data.success ? `Saved ${week.label}.` : String(result.data.error ?? "Could not save."));
     } catch {
       setMessage("Could not save. Please try again.");
     } finally {
@@ -43,7 +55,7 @@ export default function AdminWeekEditor({ weeks }: { weeks: Week[] }) {
   }
 
   return (
-    <div className="mt-10 overflow-hidden rounded-2xl border border-gold/30">
+    <div className="mt-10 overflow-x-auto rounded-2xl border border-gold/30">
       <table className="w-full text-left text-sm">
         <thead>
           <tr className="bg-cream-dark text-ink-soft">
@@ -66,6 +78,7 @@ export default function AdminWeekEditor({ weeks }: { weeks: Week[] }) {
                 <input
                   type="number"
                   min={w.takenCount}
+                  max={33}
                   value={w.maxCapacity}
                   onChange={(e) => updateLocal(w.id, { maxCapacity: Number(e.target.value) })}
                   className="w-20 rounded-lg border border-gold/40 bg-white px-2 py-1 text-ink outline-none focus:border-forest focus:ring-1 focus:ring-forest"

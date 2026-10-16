@@ -1,6 +1,7 @@
 import { business, juniorCamps, locations } from "./content";
 import type { RegistrationDetail } from "./campDb";
 import { calculateTotal, formatCents } from "./pricing";
+import { etransferInstructionLines, formatMontreal } from "./payment";
 
 const FOREST = "#1f4a34";
 const GOLD = "#c89b3c";
@@ -22,12 +23,6 @@ function escapeHtml(value: string): string {
 
 function weekLabel(weekId: string): string {
   return juniorCamps.weeks.find((w) => w.id === weekId)?.label ?? weekId;
-}
-
-// Short, human-friendly reference derived from the registration's real
-// unique id — easier for a parent to quote over the phone than a full UUID.
-export function confirmationNumber(registrationId: string): string {
-  return registrationId.replace(/-/g, "").slice(0, 8).toUpperCase();
 }
 
 function emailShell(bodyHtml: string): string {
@@ -130,8 +125,8 @@ export function buildCoachNotificationEmail(
 
   const html = emailShell(`
     <p style="margin:0 0 4px; font-family:Georgia,'Times New Roman',serif; font-size:20px; font-weight:bold; color:${FOREST};">New Junior Camp registration</p>
-    <p style="margin:0 0 20px; font-size:12px; color:${INK_SOFT};">Confirmation #${confirmationNumber(registration.id)}</p>
-    <p style="margin:0 0 20px; font-size:14px; color:${INK_SOFT}; line-height:1.6;">A new registration came in for <strong>${weeksDisplay}</strong> (${registration.children.length} child${registration.children.length === 1 ? "" : "ren"}). Review the details below. Once you can see the e-transfer for the full amount in your bank account, open the dashboard, find this registration, and confirm payment — that confirms ${weekCount === 1 ? "the spot" : "all spots"} and sends the parent their full confirmation email.</p>
+    <p style="margin:0 0 20px; font-size:12px; color:${INK_SOFT};">Reference ${registration.reference}</p>
+    <p style="margin:0 0 20px; font-size:14px; color:${INK_SOFT}; line-height:1.6;">A new registration came in for <strong>${weeksDisplay}</strong> (${registration.children.length} child${registration.children.length === 1 ? "" : "ren"}). Their spot is held for 12 hours. Reference <strong>${registration.reference}</strong>, amount due <strong>$${formatCents(registration.amountDueCents)}</strong> (tax included). Once you can see the e-transfer in your bank account, open the dashboard and confirm payment — that confirms ${weekCount === 1 ? "the spot" : "all spots"} and sends the parent their full confirmation email.</p>
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:16px;">
       ${parentRowsHtml}
       ${childRows}
@@ -150,7 +145,7 @@ export function buildCoachNotificationEmail(
   `);
 
   const text = `New Junior Camp registration — ${weeksDisplay}
-Confirmation #${confirmationNumber(registration.id)}
+Reference ${registration.reference}
 
 ${parentRows.map(([label, value]) => `${label}: ${value}`).join("\n")}
 
@@ -186,7 +181,7 @@ export function buildParentConfirmationEmail(registration: RegistrationDetail): 
   const subject = `You're confirmed! ${childNames}'s spot at ${business.name} Junior Camp`;
   const safeFirstName = escapeHtml(firstName);
   const safeChildNames = escapeHtml(childNames);
-  const confNumber = confirmationNumber(registration.id);
+  const confNumber = registration.reference;
 
   const priceRowsHtml = priceBreakdownRows(registration.totalPriceCents)
     .map(
@@ -206,7 +201,7 @@ export function buildParentConfirmationEmail(registration: RegistrationDetail): 
       <tr>
         <td style="padding:16px 20px;">
           <p style="margin:0 0 4px; font-size:12px; letter-spacing:0.08em; text-transform:uppercase; color:${GOLD}; font-weight:bold;">Confirmation Number</p>
-          <p style="margin:0 0 10px; font-size:14px; color:#1b1b16; font-weight:700;">#${confNumber}</p>
+          <p style="margin:0 0 10px; font-size:14px; color:#1b1b16; font-weight:700;">${confNumber}</p>
           <p style="margin:0 0 4px; font-size:12px; letter-spacing:0.08em; text-transform:uppercase; color:${GOLD}; font-weight:bold;">Children</p>
           <p style="margin:0 0 10px; font-size:14px; color:#1b1b16;">${safeChildNames}</p>
           <p style="margin:0 0 4px; font-size:12px; letter-spacing:0.08em; text-transform:uppercase; color:${GOLD}; font-weight:bold;">Confirmed Week${weekCount === 1 ? "" : "s"}</p>
@@ -247,7 +242,7 @@ Hi ${firstName},
 
 Payment has been received and ${childNames}'s spot${weekCount === 1 && registration.children.length === 1 ? " is" : "s are"} confirmed for Junior Camp at Golf Dorval.
 
-CONFIRMATION NUMBER: #${confNumber}
+CONFIRMATION NUMBER: ${confNumber}
 
 CONFIRMED WEEK${weekCount === 1 ? "" : "S"}:
 ${datesText}
@@ -272,5 +267,148 @@ ${juniorCamps.safetyInfo.map((i) => `- ${i}`).join("\n")}
 Questions? Reply to this email or call ${business.phone}.
 `;
 
+  return { subject, html, text };
+}
+
+// ---------------------------------------------------------------------------------------
+// Payment-policy emails: the parent's instructions, the administrators' alerts, and the
+// notice a parent gets when an unreported reservation is released. None of them contains a
+// link that changes a payment status; every link goes to a page that needs the parent's
+// private token (view / report only) or the administrators' login.
+// ---------------------------------------------------------------------------------------
+
+export function buildParentInstructionsEmail(
+  registration: RegistrationDetail,
+  opts: { statusUrl: string; payByAt: string }
+): { subject: string; html: string; text: string } {
+  const amount = `$${formatCents(registration.amountDueCents)}`;
+  const lines = etransferInstructionLines(registration.reference, amount);
+  const childNames = registration.children.map((c) => c.fullName).join(", ");
+  const weeks = registration.weekIds.map(weekLabel);
+  const subject = `Send your payment to hold ${childNames}'s camp spot (${registration.reference})`;
+  const payBy = formatMontreal(opts.payByAt);
+
+  const html = emailShell(`
+    <p style="margin:0 0 16px; font-family:Georgia,'Times New Roman',serif; font-size:20px; font-weight:bold; color:${FOREST};">Your spot is reserved &mdash; send your payment</p>
+    <p style="margin:0 0 16px; font-size:14px; color:${INK_SOFT}; line-height:1.6;">Hi ${escapeHtml(registration.parentName.split(" ")[0] || registration.parentName)}, we're holding a spot for <strong>${escapeHtml(childNames)}</strong> for ${weeks.map(escapeHtml).join(", ")}. It stays held until <strong>${escapeHtml(payBy)}</strong> (Montreal time).</p>
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 16px; border:1px solid ${BORDER}; border-radius:12px;">
+      <tr><td style="padding:16px 20px;">
+        <p style="margin:0 0 4px; font-size:12px; letter-spacing:0.08em; text-transform:uppercase; color:${GOLD}; font-weight:bold;">Your reference</p>
+        <p style="margin:0 0 12px; font-size:22px; color:#1b1b16; font-weight:700; letter-spacing:0.05em;">${escapeHtml(registration.reference)}</p>
+        <p style="margin:0 0 4px; font-size:12px; letter-spacing:0.08em; text-transform:uppercase; color:${GOLD}; font-weight:bold;">Amount to send</p>
+        <p style="margin:0; font-size:18px; color:#1b1b16; font-weight:700;">${escapeHtml(amount)} <span style="font-size:12px; font-weight:400; color:${INK_SOFT};">(tax included)</span></p>
+      </td></tr>
+    </table>
+    <ol style="margin:0 0 16px; padding-left:20px; color:${INK_SOFT}; font-size:14px; line-height:1.7;">
+      ${lines.map((l) => `<li>${escapeHtml(l)}</li>`).join("\n      ")}
+    </ol>
+    <table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 auto 16px;"><tr><td style="border-radius:999px; background:${GOLD};">
+      <a href="${escapeHtml(opts.statusUrl)}" style="display:inline-block; padding:14px 28px; font-size:14px; font-weight:bold; color:#1b1b16; text-decoration:none;">Open my reservation page</a>
+    </td></tr></table>
+    <p style="margin:0; font-size:12px; color:${INK_SOFT}; line-height:1.6;">Your spot is confirmed only once the payment is verified in our bank account. Keep this email: the button above is your private link, so please don't forward it.</p>
+  `);
+
+  const text = `Your spot is reserved - send your payment
+
+We're holding a spot for ${childNames} for ${weeks.join(", ")}. It stays held until ${payBy} (Montreal time).
+
+Reference: ${registration.reference}
+Amount to send: ${amount} (tax included)
+
+${lines.map((l, i) => `${i + 1}. ${l}`).join("\n")}
+
+Your private reservation page (please don't forward it):
+${opts.statusUrl}
+
+Your spot is confirmed only once the payment is verified in our bank account.`;
+  return { subject, html, text };
+}
+
+export type AdminAlertTier = "reported" | "due_soon" | "overdue" | "reminder" | "escalated" | "critical";
+
+export type AdminAlertSubject = {
+  reference: string;
+  parentName: string;
+  email: string;
+  primaryPhone: string;
+  childNames: string[];
+  weekIds: string[];
+  heldSpots: number;
+  amountDueCents: number;
+  paymentReportedAt: string | null;
+  reviewDueAt: string | null;
+};
+
+const TIER_PREFIX: Record<AdminAlertTier, string> = {
+  reported: "Payment reported",
+  due_soon: "Review due soon",
+  overdue: "[URGENT] Payment review overdue",
+  reminder: "[REMINDER] Payment review still overdue",
+  escalated: "[ESCALATED] Payment review overdue",
+  critical: "[CRITICAL] Spots blocked by an unverified payment",
+};
+
+export function buildAdminAlertEmail(
+  tier: AdminAlertTier,
+  s: AdminAlertSubject,
+  opts: { hoursOverdue: number; hoursUntilDue: number; dashboardUrl: string }
+): { subject: string; html: string; text: string } {
+  const names = s.childNames.join(", ");
+  const subject = `${TIER_PREFIX[tier]}: ${s.reference} (${names})`;
+  const status =
+    tier === "reported"
+      ? "A parent says they have sent an e-Transfer. Nothing is confirmed until you see the deposit in your bank account."
+      : tier === "due_soon"
+        ? `This reported payment needs verifying within about ${Math.max(opts.hoursUntilDue, 0)} hour(s). Its spot is held until you act.`
+        : `This reported payment is ${opts.hoursOverdue} hour(s) overdue for review. Its ${s.heldSpots} spot(s) are STILL HELD and will stay held until you confirm, release or extend it.`;
+  const rows: [string, string][] = [
+    ["Reference", s.reference],
+    ["Parent", `${s.parentName} (${s.email}, ${s.primaryPhone})`],
+    ["Children", names],
+    ["Weeks", s.weekIds.map(weekLabel).join(", ")],
+    ["Amount due", `$${formatCents(s.amountDueCents)} (tax included)`],
+    ["Reported", s.paymentReportedAt ? formatMontreal(s.paymentReportedAt) : "-"],
+    ["Review due", s.reviewDueAt ? formatMontreal(s.reviewDueAt) : "-"],
+  ];
+  const next =
+    "What to do: check your bank for the reference and amount. If you see it, confirm payment. If you see nothing, contact the parent for the bank's confirmation number. If the bank shows the transfer as pending, extend the review. If you still can't find it, release it as payment not received.";
+
+  const html = emailShell(`
+    <p style="margin:0 0 12px; font-family:Georgia,'Times New Roman',serif; font-size:20px; font-weight:bold; color:${FOREST};">${escapeHtml(TIER_PREFIX[tier])}</p>
+    <p style="margin:0 0 16px; font-size:14px; color:${INK_SOFT}; line-height:1.6;">${escapeHtml(status)}</p>
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 16px;">
+      ${rows.map(([k, v]) => `<tr><td style="padding:5px 0; font-size:13px; color:${INK_SOFT}; width:32%; vertical-align:top;">${escapeHtml(k)}</td><td style="padding:5px 0; font-size:13px; color:#1b1b16; font-weight:600;">${escapeHtml(v)}</td></tr>`).join("\n      ")}
+    </table>
+    <p style="margin:0 0 16px; font-size:13px; color:${INK_SOFT}; line-height:1.6;">${escapeHtml(next)}</p>
+    <table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 auto;"><tr><td style="border-radius:999px; background:${GOLD};">
+      <a href="${escapeHtml(opts.dashboardUrl)}" style="display:inline-block; padding:14px 28px; font-size:14px; font-weight:bold; color:#1b1b16; text-decoration:none;">Open the review queue</a>
+    </td></tr></table>
+  `);
+  const text = `${TIER_PREFIX[tier]}
+
+${status}
+
+${rows.map(([k, v]) => `${k}: ${v}`).join("\n")}
+
+${next}
+
+Review queue (login required): ${opts.dashboardUrl}`;
+  return { subject, html, text };
+}
+
+export function buildParentReleaseNoticeEmail(registration: RegistrationDetail): { subject: string; html: string; text: string } {
+  const childNames = registration.children.map((c) => c.fullName).join(", ");
+  const subject = `Your camp reservation for ${childNames} was released (${registration.reference})`;
+  const body =
+    "Your reservation was released because we didn't see a payment report in time. " +
+    "If you already sent your e-Transfer, your money isn't lost: reply to this email with your reference, " +
+    "and we'll check and reinstate you if a spot is still free, or refund you. " +
+    "If you still want a spot, you're welcome to register again.";
+  const html = emailShell(`
+    <p style="margin:0 0 12px; font-family:Georgia,'Times New Roman',serif; font-size:20px; font-weight:bold; color:${FOREST};">Your reservation was released</p>
+    <p style="margin:0 0 12px; font-size:14px; color:${INK_SOFT}; line-height:1.6;">Reference <strong>${escapeHtml(registration.reference)}</strong> &middot; ${escapeHtml(childNames)}</p>
+    <p style="margin:0; font-size:14px; color:${INK_SOFT}; line-height:1.6;">${escapeHtml(body)}</p>
+  `);
+  const text = `Your reservation was released\n\nReference ${registration.reference} - ${childNames}\n\n${body}`;
   return { subject, html, text };
 }

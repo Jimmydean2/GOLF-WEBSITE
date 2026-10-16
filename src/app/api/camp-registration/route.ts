@@ -4,8 +4,10 @@ import { isDatabaseConfigured } from "@/lib/db";
 import { getRegistrationById, reserveRegistration, type ReserveChildInput } from "@/lib/campDb";
 import { appendCampRegistration, isGoogleSheetsConfigured } from "@/lib/googleSheets";
 import { isEmailConfigured, sendEmail } from "@/lib/email";
-import { buildCoachNotificationEmail } from "@/lib/campEmailTemplates";
+import { buildCoachNotificationEmail, buildParentInstructionsEmail } from "@/lib/campEmailTemplates";
 import { isValidEmail } from "@/lib/validation";
+import { isRegistrationLinkConfigured, makeAccessToken } from "@/lib/registrationLink";
+import { clientIp, rateLimit } from "@/lib/rateLimit";
 
 const VALID_WEEKS = juniorCamps.weeks.map((w) => w.id);
 const weekLabel = (id: string) => juniorCamps.weeks.find((w) => w.id === id)?.label ?? id;
@@ -33,11 +35,34 @@ export async function POST(request: Request) {
     );
   }
 
+  // Every reservation is given a private link; without the key that signs it, a reservation
+  // would be created that its parent could never reach. Refuse up front instead.
+  if (!isRegistrationLinkConfigured()) {
+    console.error("REGISTRATION_LINK_SECRET is missing or shorter than 16 characters: registration is switched off.");
+    return NextResponse.json(
+      { error: "Online registration isn't set up yet. Please call or email instead." },
+      { status: 503 }
+    );
+  }
+
   let body: Record<string, unknown>;
   try {
     body = await request.json();
   } catch {
     return NextResponse.json({ error: "Invalid request." }, { status: 400 });
+  }
+
+  // Rate limits (per address, and per email) so the form can't be used to flood the camp
+  // with reservations. A retried submission with the same idempotency key is a replay,
+  // not a new reservation, and counts against neither limit for long.
+  const ip = clientIp(request);
+  const perIp = await rateLimit("register-ip", ip, 10, 3600);
+  const perEmail = await rateLimit("register-email", String(body.email ?? "").trim() || ip, 5, 3600);
+  if (!perIp.allowed || !perEmail.allowed) {
+    return NextResponse.json(
+      { error: "Too many registrations from this connection just now. Please wait a little while, or contact us directly." },
+      { status: 429, headers: { "Retry-After": String(Math.max(perIp.retryAfterSeconds, perEmail.retryAfterSeconds)) } }
+    );
   }
 
   const idempotencyKey = String(body.idempotencyKey ?? "").trim();
@@ -108,6 +133,14 @@ export async function POST(request: Request) {
     });
 
     if (!result.ok) {
+      if (result.reason === "too_many_open") {
+        return NextResponse.json(
+          {
+            error: `There are already several unpaid reservations under this email or phone number. Please send payment for those first, or contact us at ${business.phone}.`,
+          },
+          { status: 429 }
+        );
+      }
       if (result.reason === "weeks_full") {
         return NextResponse.json(
           {
@@ -126,8 +159,16 @@ export async function POST(request: Request) {
 
     // A duplicate submission (double-click, retried request) returns the
     // same already-created registration — nothing further to send again.
+    const statusPath = `/camp-registration/${makeAccessToken(result.registrationId)}`;
+    const reply = {
+      success: true,
+      reference: result.reference,
+      amountDueCents: result.amountDueCents,
+      payByAt: result.payByAt,
+      statusPath,
+    };
     if (result.alreadyExisted) {
-      return NextResponse.json({ success: true });
+      return NextResponse.json(reply);
     }
 
     // Google Sheets is a secondary reporting copy, not the source of
@@ -152,7 +193,7 @@ export async function POST(request: Request) {
             codeOfConductAccepted: "Yes",
             consentAccepted: "Yes",
             id: result.registrationId,
-            confirmToken: result.confirmToken,
+            reference: result.reference,
           });
         }
       } catch (err) {
@@ -164,22 +205,31 @@ export async function POST(request: Request) {
       try {
         const registration = await getRegistrationById(result.registrationId);
         if (registration) {
-          // The email links only to the (login-protected) dashboard — never to
-          // anything that changes a payment status.
-          const dashboardUrl = new URL("/admin/camp-rosters", request.url);
+          // The parent's private link and payment instructions, so they can come back to
+          // tap "I've Sent My Payment" after they've sent the transfer.
+          const statusUrl = new URL(statusPath, request.url).toString();
+          try {
+            const instructions = buildParentInstructionsEmail(registration, { statusUrl, payByAt: result.payByAt });
+            await sendEmail({ to: registration.email, ...instructions });
+          } catch (err) {
+            console.error("Failed to send the parent's payment instructions (non-fatal):", err);
+          }
 
+          // The administrators' notification links only to the (login-protected)
+          // dashboard, never to anything that changes a payment status.
+          const dashboardUrl = new URL("/admin/camp-rosters", request.url);
           const { subject, html, text } = buildCoachNotificationEmail(registration, dashboardUrl.toString());
           await sendEmail({ to: business.email, subject, html, text });
         }
       } catch (err) {
-        // Don't fail the registration if the notification email can't send —
-        // it's already safely committed in the database either way, and an
-        // admin can resend the notification from the dashboard.
-        console.error("Failed to send camp registration notification email:", err);
+        // Don't fail the registration if an email can't send: it's already safely
+        // committed, the parent has the instructions on screen, and an administrator can
+        // resend the notification from the dashboard.
+        console.error("Failed to send camp registration emails:", err);
       }
     }
 
-    return NextResponse.json({ success: true });
+    return NextResponse.json(reply);
   } catch (err) {
     console.error("Camp registration failed:", err);
     return NextResponse.json(

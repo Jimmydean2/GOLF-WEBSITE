@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { business, juniorCamps, locations, type CampWeekId } from "@/lib/content";
 import { calculateTotal, formatCents } from "@/lib/pricing";
 
@@ -24,6 +24,7 @@ function newChild(): ChildEntry {
 
 export default function CampRegistrationForm() {
   const searchParams = useSearchParams();
+  const router = useRouter();
   const [status, setStatus] = useState<Status>("idle");
   const [errorMessage, setErrorMessage] = useState("");
   const [submittedWeekCount, setSubmittedWeekCount] = useState(0);
@@ -187,6 +188,12 @@ export default function CampRegistrationForm() {
       });
       const result = await response.json();
 
+      if (response.ok && result.success && typeof result.statusPath === "string") {
+        // Straight to their private payment page: reference, instructions, and the
+        // "I've Sent My Payment" button. No account to create.
+        router.push(result.statusPath);
+        return;
+      }
       if (response.ok && result.success) {
         setStatus("success");
         setSubmittedWeekCount(weekCount);
@@ -219,9 +226,8 @@ export default function CampRegistrationForm() {
         </p>
         <p className="mt-2 text-ink-soft">
           A spot is being held for {submittedChildCount === 1 ? "your child" : `each of your ${submittedChildCount} children`} for every week you selected.
-          Coach James will review availability and reach out to confirm and
-          arrange payment &mdash; spots are only secured once payment is
-          received in full.
+          Please check your email for your payment instructions and reference &mdash; spots are only secured once
+          payment is received in full.
         </p>
         <p className="mt-4 rounded-xl bg-cream-dark px-4 py-3 font-display text-base font-semibold text-forest">
           Total due: {submittedChildCount} child{submittedChildCount === 1 ? "" : "ren"} &times; {submittedWeekCount} week{submittedWeekCount === 1 ? "" : "s"} = ${formatCents(submittedTotalCents)} (tax included)
@@ -445,22 +451,14 @@ export default function CampRegistrationForm() {
         <h4 className="font-display text-base font-semibold text-forest">Method of Payment</h4>
         <ul className="mt-3 space-y-2 text-sm text-ink-soft">
           <li>
-            Once the registration form has been received, Coach James will
-            review availability and contact you to confirm whether a space
-            can be offered.
+            Registering holds your spot right away. On the next screen (and by email) you&apos;ll get your unique reference and
+            the Interac e-Transfer instructions.
           </li>
-          <li>If a spot is confirmed, payment must be made in full to secure registration.</li>
           <li>
-            For payment details, please contact Coach James at{" "}
-            <a href={`mailto:${business.email}`} className="font-semibold text-forest hover:underline">
-              {business.email}
-            </a>{" "}
-            or{" "}
-            <a href={business.phoneHref} className="font-semibold text-forest hover:underline">
-              {business.phone}
-            </a>
-            .
+            Send your e-Transfer within 12 hours to keep your spot, then tap <strong>&ldquo;I&apos;ve Sent My Payment.&rdquo;</strong> No
+            account and no screenshots needed.
           </li>
+          <li>Your spot is confirmed once we verify the payment in our bank account.</li>
           <li>Cancellations are subject to a ${juniorCamps.cancellationFee} administrative fee.</li>
           <li>No payments to {locations[juniorCamps.venue].name} will be accepted.</li>
         </ul>

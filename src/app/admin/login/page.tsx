@@ -4,11 +4,12 @@ import { FormEvent, Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Container from "@/components/Container";
 import { business } from "@/lib/content";
+import { safeAdminNextPath } from "@/lib/requestGuards";
 
 function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const next = searchParams.get("next") || "/admin/camp-rosters";
+  const next = safeAdminNextPath(searchParams.get("next"));
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);

@@ -1,11 +1,11 @@
 import ExcelJS from "exceljs";
 import { business, juniorCamps, locations } from "./content";
-import { getWeekRoster } from "./campDb";
+import { getCampWeeks, getWeekRoster } from "./campDb";
 
 // Server-only. Builds the printable Junior Camp roster workbook straight
-// from live registration data — one sheet per camp week, 30 rows each,
-// auto-filled with whoever has actually registered. See
-// /admin/camp-rosters and BOOKING_SETUP.md.
+// from live registration data — one sheet per camp week, at least 30 rows each
+// (more if you have authorized a bigger week, up to 33), auto-filled with
+// whoever has actually registered. See /admin/camp-rosters and BOOKING_SETUP.md.
 
 const FOREST = "FF1F4A34";
 const FOREST_DARK = "FF143324";
@@ -16,6 +16,9 @@ const INK_SOFT = "FF4A463C";
 const WHITE = "FFFFFFFF";
 const BORDER_COLOR = "FFC9BD9A";
 
+// The standard week size, and the minimum number of numbered rows on a printed sheet. A week
+// the administrator has authorized above 30 gets its extra rows too, so no registered child
+// can ever be missing from the printout.
 const MAX_CAMPERS = 30;
 
 const HEADERS = [
@@ -51,6 +54,7 @@ export type RosterRow = {
 export type WeekRoster = {
   id: string;
   label: string;
+  capacity: number; // this week's limit right now (30 unless raised by an administrator)
   rows: RosterRow[];
 };
 
@@ -60,6 +64,7 @@ export type WeekRoster = {
 // what Google Sheets (a write-only reporting copy) happens to show.
 export async function getCampRosterData(): Promise<WeekRoster[]> {
   const weekRosters: WeekRoster[] = [];
+  const capacityById = new Map((await getCampWeeks()).map((w) => [w.id, w.maxCapacity]));
   for (const week of juniorCamps.weeks) {
     const spots = await getWeekRoster(week.id);
     const rows: RosterRow[] = spots
@@ -81,7 +86,7 @@ export async function getCampRosterData(): Promise<WeekRoster[]> {
         checkedIn: s.checkedInAt ? "Y" : "N",
         checkedInAt: s.checkedInAt,
       }));
-    weekRosters.push({ id: week.id, label: week.label, rows });
+    weekRosters.push({ id: week.id, label: week.label, capacity: capacityById.get(week.id) ?? MAX_CAMPERS, rows });
   }
   return weekRosters;
 }
@@ -122,11 +127,11 @@ function buildWeekSheet(wb: ExcelJS.Workbook, tabName: string, weekRoster: WeekR
 
   ws.mergeCells(`A3:${lastColLetter}3`);
   ws.getCell("A3").value =
-    `${juniorCamps.hours}  ·  ${venue.name}, ${venue.address}  ·  Max ${MAX_CAMPERS} campers`;
+    `${juniorCamps.hours}  ·  ${venue.name}, ${venue.address}  ·  Max ${weekRoster.capacity} campers`;
   ws.getCell("A3").font = { name: "Arial", size: 9, italic: true, color: { argb: INK_SOFT } };
 
   ws.mergeCells(`A4:${lastColLetter}4`);
-  ws.getCell("A4").value = `Registered: ${weekRoster.rows.length} of ${MAX_CAMPERS}`;
+  ws.getCell("A4").value = `Registered: ${weekRoster.rows.length} of ${weekRoster.capacity}`;
   ws.getCell("A4").font = { name: "Arial", size: 10, bold: true, color: { argb: FOREST_DARK } };
 
   ws.mergeCells(`A5:${lastColLetter}5`);
@@ -148,7 +153,8 @@ function buildWeekSheet(wb: ExcelJS.Workbook, tabName: string, weekRoster: WeekR
   });
 
   const firstDataRow = headerRowIndex + 1;
-  for (let i = 0; i < MAX_CAMPERS; i++) {
+  const rowCount = Math.max(MAX_CAMPERS, weekRoster.capacity, weekRoster.rows.length);
+  for (let i = 0; i < rowCount; i++) {
     const rowIndex = firstDataRow + i;
     const row = ws.getRow(rowIndex);
     const registrant = weekRoster.rows[i];
@@ -214,11 +220,11 @@ function buildCoverSheet(wb: ExcelJS.Workbook, weekRosters: WeekRoster[]) {
   const sections: [string, string][] = [
     [
       "Generated",
-      `${generatedAt} — pulled live from the CampRegistrations sheet. Re-download any time for the latest sign-ups.`,
+      `${generatedAt} — pulled live from the registration database. Re-download any time for the latest sign-ups.`,
     ],
     [
       "What this is",
-      "One print-ready sign-in sheet per camp week (10 tabs below), each sized for the 30-camper cap. Hand the right tab to whoever is working that week.",
+      "One print-ready sign-in sheet per camp week (10 tabs below), each with at least 30 numbered rows (more for a week you have authorized above 30). Hand the right tab to whoever is working that week.",
     ],
     [
       "How to use a week's tab",
@@ -259,7 +265,7 @@ function buildCoverSheet(wb: ExcelJS.Workbook, weekRosters: WeekRoster[]) {
     ws.getCell(`A${row}`).value = "•";
     ws.getCell(`A${row}`).font = { name: "Arial", size: 10, color: { argb: GOLD_DEEP } };
     const cell = ws.getCell(`B${row}`);
-    cell.value = `${w.label} — ${w.rows.length} of ${MAX_CAMPERS}`;
+    cell.value = `${w.label} — ${w.rows.length} of ${w.capacity}`;
     cell.font = { name: "Arial", size: 10, color: { argb: INK } };
     row += 1;
   }
