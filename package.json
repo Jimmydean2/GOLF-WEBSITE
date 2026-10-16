@@ -16,8 +16,10 @@
     "test:xlsx-safety": "tsx db/tests/xlsx-safety.test.mjs",
     "test:families": "tsx db/tests/families.test.mjs",
     "test:registration-flow": "tsx db/tests/registration-flow.test.mjs",
+    "test:outbox": "tsx db/tests/outbox.test.mjs",
+    "test:scheduler": "tsx db/tests/scheduler.test.mjs",
     "test:mutations": "tsx db/tests/mutation-check.mjs",
-    "test": "npm run test:payment-integrity && npm run test:payment-policy && npm run test:admin-security && npm run test:alerts && npm run test:families && npm run test:registration-flow && npm run test:concurrency && npm run test:xlsx-safety"
+    "test": "npm run test:payment-integrity && npm run test:payment-policy && npm run test:admin-security && npm run test:alerts && npm run test:families && npm run test:registration-flow && npm run test:outbox && npm run test:scheduler && npm run test:concurrency && npm run test:xlsx-safety"
   },
   "dependencies": {
     "exceljs": "^4.4.0",

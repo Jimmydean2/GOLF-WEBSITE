@@ -81,7 +81,7 @@ function ConfirmModal({ target, onClose, onDone }: { target: ActionTarget; onClo
     setBusy(false);
     if (result.ok && result.data.success) {
       const restored = Array.isArray(result.data.reinstatedWeekIds) && result.data.reinstatedWeekIds.length > 0 ? " Spots restored." : "";
-      const mail = result.data.alreadyPaid ? "It was already confirmed." : result.data.emailSent ? "The parent was emailed their confirmation." : "No email was sent (email isn't connected).";
+      const mail = result.data.alreadyPaid ? "It was already confirmed." : result.data.emailConfigured ? "The parent's confirmation email is on its way (the Email box above shows if it gets stuck)." : "Email isn't connected, so the confirmation email is waiting to be sent.";
       onDone(`Payment confirmed for ${target.reference}.${restored} ${mail}`);
     } else {
       setError(String(result.data.error ?? "Could not confirm this payment. Nothing was changed."));

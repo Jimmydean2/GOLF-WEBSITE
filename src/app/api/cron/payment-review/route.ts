@@ -1,17 +1,22 @@
 import { timingSafeEqual } from "crypto";
 import { NextResponse } from "next/server";
 import { isDatabaseConfigured } from "@/lib/db";
-import { dispatchDueAlerts } from "@/lib/alerts";
+import { runScheduledCheck } from "@/lib/scheduledCheck";
+import { siteOrigin } from "@/lib/siteUrl";
+
+// How long the platform may let one run take. A run stops starting new work after about 25
+// seconds, and every mail connection has its own timeout, so this is a ceiling, not a target.
+export const maxDuration = 60;
 
 // GET /api/cron/payment-review
-// The scheduled check: releases unreported reservations past their 12-hour hold, and sends
-// the administrators' alerts and the parents' release notices that are due. Safe to call as
-// often as you like; each alert is sent once. It does nothing to a reported payment except
-// alert about it: nothing here ever releases or confirms one.
+// The scheduled check (see src/lib/scheduledCheck.ts): releases reservations whose 12-hour hold
+// ended with no payment report, queues reminders, sends the administrators' alerts and every
+// email waiting in the outbox. Safe to call as often as you like, even at once; nothing is
+// done or sent twice. It never releases, confirms or changes a payment a parent has reported.
 //
-// Protected by CRON_SECRET (Vercel Cron sends it as a Bearer token). It is NOT scheduled by
-// anything in this repository: no vercel.json cron is configured, so nothing runs until you
-// choose a schedule (a paid plan allows frequent runs; the free plan allows one a day).
+// Protected by CRON_SECRET (Vercel Cron sends it as a Bearer token; any other scheduler can
+// send the same header). It is NOT scheduled by anything in this repository: no vercel.json
+// cron is configured, so nothing calls it until you choose a scheduler (docs/SCHEDULING.md).
 export async function GET(request: Request) {
   const secret = process.env.CRON_SECRET;
   if (!secret || secret.length < 16) {
@@ -26,18 +31,8 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Registrations aren't connected yet." }, { status: 503 });
   }
 
-  try {
-    const summary = await dispatchDueAlerts({ dashboardUrl: new URL("/admin/camp-rosters", request.url).toString() });
-    return NextResponse.json({
-      ok: true,
-      released: summary.released.length,
-      alertsSent: summary.alerts.length,
-      parentNotices: summary.parentNotices.length,
-      failures: summary.failures,
-      skipped: summary.skipped ?? null,
-    });
-  } catch (err) {
-    console.error("Scheduled payment review failed:", err);
-    return NextResponse.json({ error: "The scheduled check failed." }, { status: 502 });
-  }
+  const summary = await runScheduledCheck({ source: "cron", origin: siteOrigin(request.url) });
+  // A failed run is a failed request, so a scheduler that reports failures (GitHub Actions,
+  // for one) tells the owner.
+  return NextResponse.json(summary, { status: summary.ok ? 200 : 502 });
 }

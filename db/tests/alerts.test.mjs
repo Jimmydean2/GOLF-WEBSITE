@@ -21,7 +21,7 @@ const h = createHarness();
 const { pool, campDb, check, resetAll, input, kids, reserveOk, fill, week, reg, auditFor, confirmFor, expireHold, makeOverdue, invariants } = h;
 const { reportPayment, grantReviewExtension, cancelRegistration, getPaymentQueue, reserveRegistration } = campDb;
 const alerts = await import("../../src/lib/alerts.ts");
-const { planAlerts, dispatchDueAlerts, notifyPaymentReported, maybeDispatchFromTraffic, adminAlertRecipients } = alerts;
+const { planAlerts, dispatchDueAlerts, notifyPaymentReported, adminAlertRecipients } = alerts;
 const { business } = await import("../../src/lib/content.ts");
 
 const MIN = 60_000;
@@ -48,7 +48,6 @@ const PREFIXES = [
   ["[URGENT]", "overdue"],
   ["Review due soon", "due_soon"],
   ["Payment reported", "reported"],
-  ["Your camp reservation", "parent_release"],
 ];
 const tierOf = (m) => PREFIXES.find(([p]) => m.subject.startsWith(p))?.[1] ?? "?";
 const tiers = (msgs) => msgs.map(tierOf).join(",");
@@ -174,6 +173,7 @@ console.log("\n=== 4. The administrator is away for a weekend ===");
   const paid = await fill("jul27", 27, "wk-paid");
   for (const id of paid) await confirmFor(id);
   const B = await reserveOk("wk-B", { weekIds: ["jul27"], parentName: "Unreported Family" });
+  const rowB0 = await reg(B);
   check("Friday: the week is full (27 paid + 2 children awaiting + 1 unreported hold)", (await week("jul27")).taken_count === 30);
   const full = await reserveRegistration(input("wk-C-early", { weekIds: ["jul27"] }));
   check("Friday: another family is told the week is full", !full.ok && full.reason === "weeks_full");
@@ -203,8 +203,8 @@ console.log("\n=== 4. The administrator is away for a weekend ===");
       check(`+${hour}h: the reported payment is still protected, holding both spots`, r.status === "payment_reported" && r.spotsActive === 2, r.status);
     }
   }
-  check("alerts over the weekend: parent notice for the released family, then due-soon, overdue, and two reminders — each exactly once", timeline.join(" | ") === "13h:parent_release | 42h:due_soon | 48h:overdue | 54h:reminder | 60h:reminder", timeline.join(" | "));
-  check("the 'unreported family' notice went to that parent, not to the administrators", m.sent.filter((x) => tierOf(x) === "parent_release").length === 1 && m.sent.find((x) => tierOf(x) === "parent_release").to === (await reg(B)).email);
+  check("alerts over the weekend: due-soon, overdue, and two reminders — each exactly once", timeline.join(" | ") === "42h:due_soon | 48h:overdue | 54h:reminder | 60h:reminder", timeline.join(" | "));
+  check("the administrators' alerts never mention the unreported family (its notice is the parent's email, queued in the outbox)", m.sent.every((x) => !x.text.includes((rowB0 ?? {}).reference_code ?? "none")) && (await pool.query(`SELECT count(*)::int AS n FROM email_outbox WHERE kind = 'parent_release' AND registration_id = $1`, [B])).rows[0].n === 1);
 
   const q = await getPaymentQueue(new Date(T0 + 63 * HOUR + 5 * MIN));
   const itemA = q.reported.find((i) => i.id === A);
@@ -360,10 +360,11 @@ console.log("\n=== 8. What the emails say (and do not say) ===");
 }
 
 // ---------------------------------------------------------------------------
-console.log("\n=== 9. The parent's notice when an unreported reservation is released ===");
+console.log("\n=== 9. Releasing an unreported reservation queues the parent's notice (the outbox sends it) ===");
 {
   await resetAll();
   await clearLedger();
+  await pool.query(`DELETE FROM email_outbox`);
   const P = await reserveOk("notice-p", { weekIds: ["jul06"], parentName: "Pat Parent" });
   const Q = await reserveOk("notice-q", { weekIds: ["jul06"] });
   await reportPayment(Q);
@@ -374,19 +375,17 @@ console.log("\n=== 9. The parent's notice when an unreported reservation is rele
 
   const m = mailer();
   const run = await dispatch(m, Date.now());
-  const rowP = await reg(P);
-  const notices = m.sent.filter((x) => tierOf(x) === "parent_release");
-  check("the released family gets one notice, at its own email address", run.parentNotices.join() === P && notices.length === 1 && notices[0].to === rowP.email);
-  check("it carries the reference and tells the parent what to do if they did send payment", notices[0].text.includes(rowP.reference_code) && /reply to this email/i.test(notices[0].text) && /refund/i.test(notices[0].text));
-  check("it contains no web link (nothing to click, nothing to forge)", !/https?:\/\//.test(notices[0].text) && !/href="https?:/i.test(notices[0].html));
-  check("a release the administrator did (not received, or cancelled) sends no automatic notice — the administrator is in touch with that family", m.sent.length === 1);
+  const queued = (await pool.query(`SELECT registration_id FROM email_outbox WHERE kind = 'parent_release'`)).rows.map((r) => r.registration_id);
+  check("the 12-hour release of the unreported family queues exactly one notice for them", run.released.join() === P && queued.join() === P);
+  check("a release the administrator did (not received, or cancelled) queues no automatic notice — the administrator is in touch with that family", !queued.includes(Q) && !queued.includes(R));
+  check("the alerts dispatcher itself sends no parent email", m.sent.length === 0);
   await dispatch(m, Date.now() + 1000);
-  check("the notice is never sent twice", m.sent.length === 1);
+  check("releasing again queues nothing more", (await pool.query(`SELECT count(*)::int AS n FROM email_outbox WHERE kind = 'parent_release'`)).rows[0].n === 1);
   await invariants("parent notice");
 }
 
 // ---------------------------------------------------------------------------
-console.log("\n=== 10. No mail configured, and the fallback that runs from site traffic ===");
+console.log("\n=== 10. No mail configured ===");
 {
   await resetAll();
   await clearLedger();
@@ -395,19 +394,6 @@ console.log("\n=== 10. No mail configured, and the fallback that runs from site 
   const none = await dispatchDueAlerts({ dashboardUrl: DASH });
   check("without email configured the dispatcher reports that it skipped sending", none.skipped === "email_not_configured");
   check("...but the 12-hour release still happened", none.released.includes(stale) && (await reg(stale)).status === "cancelled");
-  check("the traffic fallback does nothing at all without email configured", (await maybeDispatchFromTraffic(DASH)) === null);
-
-  await pool.query(`DELETE FROM camp_settings WHERE key='last_alert_dispatch'`);
-  const m = mailer();
-  const first = await maybeDispatchFromTraffic(DASH, { send: m.send, adminEmails: ADMINS });
-  const second = await maybeDispatchFromTraffic(DASH, { send: m.send, adminEmails: ADMINS });
-  check("the fallback runs once, then not again within 5 minutes", first !== null && second === null);
-  await pool.query(`UPDATE camp_settings SET value = (now() - interval '6 minutes')::text WHERE key='last_alert_dispatch'`);
-  const third = await maybeDispatchFromTraffic(DASH, { send: m.send, adminEmails: ADMINS });
-  check("after 5 minutes it runs again", third !== null);
-  await pool.query(`UPDATE camp_settings SET value = (now() - interval '6 minutes')::text WHERE key='last_alert_dispatch'`);
-  const burst = await Promise.all(Array.from({ length: 12 }, () => maybeDispatchFromTraffic(DASH, { send: m.send, adminEmails: ADMINS })));
-  check("12 visitors at once: exactly one of them runs it", burst.filter((x) => x !== null).length === 1);
 }
 
 // ---------------------------------------------------------------------------

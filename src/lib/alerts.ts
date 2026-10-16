@@ -2,21 +2,16 @@ import { getPool } from "./db";
 import {
   getCampSettings,
   getPaymentQueue,
-  getRegistrationById,
-  releaseExpiredReservations,
+    releaseExpiredReservations,
   type QueueItem,
 } from "./campDb";
 import type { CampSettings } from "./campSettings";
 import { business } from "./content";
 import { isEmailConfigured, sendEmail } from "./email";
-import {
-  buildAdminAlertEmail,
-  buildParentReleaseNoticeEmail,
-  type AdminAlertSubject,
-  type AdminAlertTier,
-} from "./campEmailTemplates";
+import { buildAdminAlertEmail, type AdminAlertSubject, type AdminAlertTier } from "./campEmailTemplates";
 
-// Server-only. The administrators' alerts and the parent's release notice.
+// Server-only. The administrators' alerts. (The parents' emails, including the notice that an
+// unreported reservation was released, go through the outbox: see outbox.ts.)
 //
 // Nothing here changes a registration, except that dispatchDueAlerts first runs the
 // automatic 12-hour release. An overdue reported payment is NEVER released by this code:
@@ -113,12 +108,11 @@ export type DispatchSummary = {
   skipped?: "email_not_configured";
   released: string[]; // registrations released by the 12-hour rule in this run
   alerts: { key: string; tier: AdminAlertTier; registrationId: string }[];
-  parentNotices: string[]; // registration ids
   failures: number;
 };
 
-// Runs the automatic 12-hour release, then sends whatever administrator alerts and parent
-// notices are due and have not been sent. Safe to call as often as you like, from a
+// Runs the automatic 12-hour release, then sends whatever administrator alerts are due and
+// have not been sent. Safe to call as often as you like, from a
 // scheduled job, from site traffic, or by hand.
 export async function dispatchDueAlerts(opts: {
   dashboardUrl: string;
@@ -127,7 +121,7 @@ export async function dispatchDueAlerts(opts: {
   adminEmails?: string[];
 }): Promise<DispatchSummary> {
   const now = opts.now;
-  const summary: DispatchSummary = { released: [], alerts: [], parentNotices: [], failures: 0 };
+  const summary: DispatchSummary = { released: [], alerts: [], failures: 0 };
   summary.released = (await releaseExpiredReservations(now)).releasedRegistrationIds;
 
   const send: Mailer | null = opts.send ?? (isEmailConfigured() ? sendEmail : null);
@@ -177,23 +171,6 @@ export async function dispatchDueAlerts(opts: {
     }
   }
 
-  // 2. Parent notices for reservations released after 12 hours with no report.
-  for (const item of queue.released) {
-    if (item.releaseReason !== "expired_unpaid") continue;
-    const key = `parent_release:${item.id}`;
-    if (!(await claim(key, "parent_release", item.id, item.email))) continue;
-    try {
-      const registration = await getRegistrationById(item.id);
-      if (!registration) throw new Error("registration vanished");
-      await send({ to: registration.email, ...buildParentReleaseNoticeEmail(registration) });
-      await markSent([key]);
-      summary.parentNotices.push(item.id);
-    } catch (err) {
-      console.error("Sending a release notice failed:", err);
-      await unclaim([key]);
-      summary.failures++;
-    }
-  }
   return summary;
 }
 
@@ -225,20 +202,4 @@ export async function notifyPaymentReported(
     await unclaim([key]);
     return false;
   }
-}
-
-// Called from public traffic as a fallback when no scheduled job is running: at most once
-// every 5 minutes (claimed in the database, so many visitors at once do not all run it).
-export async function maybeDispatchFromTraffic(
-  dashboardUrl: string,
-  opts: { send?: Mailer; adminEmails?: string[] } = {}
-): Promise<DispatchSummary | null> {
-  if (!opts.send && !isEmailConfigured()) return null;
-  const { rowCount } = await getPool().query(
-    `INSERT INTO camp_settings (key, value) VALUES ('last_alert_dispatch', now()::text)
-     ON CONFLICT (key) DO UPDATE SET value = now()::text, updated_at = now()
-       WHERE camp_settings.value::timestamptz < now() - interval '5 minutes'`
-  );
-  if ((rowCount ?? 0) === 0) return null;
-  return dispatchDueAlerts({ dashboardUrl, send: opts.send, adminEmails: opts.adminEmails });
 }

@@ -14,6 +14,7 @@ export type CampSettings = {
   extensionMaxHours: number; // longest single extension an administrator can grant
   extensionMaxCount: number; // extensions per registration (the database allows at most 3)
   openReservationsPerContact: number;
+  parentReminderHours: number; // reminder this many hours before an unreported hold ends (0 = off)
   strikeLimit: number; // "payment not received" releases before the report button is withdrawn
   strikeWindowDays: number;
   alertDueSoonHours: number;
@@ -32,6 +33,7 @@ export const SETTING_RULES: Record<keyof CampSettings, Rule> = {
   extensionMaxHours: { default: 72, min: 1, max: 72 },
   extensionMaxCount: { default: 2, min: 0, max: 3 },
   openReservationsPerContact: { default: 8, min: 1, max: 20 },
+  parentReminderHours: { default: 3, min: 0, max: 11 },
   strikeLimit: { default: 2, min: 1, max: 10 },
   strikeWindowDays: { default: 30, min: 1, max: 180 },
   alertDueSoonHours: { default: 6, min: 1, max: 24 },

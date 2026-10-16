@@ -12,6 +12,7 @@ import {
 import { isValidEmail } from "./validation";
 import { isRegistrationLinkConfigured, makeAccessToken } from "./registrationLink";
 import { clientIp, rateLimit, rateLimitRefund, type RateLimitResult } from "./rateLimit";
+import { siteOrigin } from "./siteUrl";
 
 // Server-only. Everything the registration form's POST does, kept apart from the Next.js
 // route file so it can be exercised directly (and under load) without a web server.
@@ -171,10 +172,6 @@ function json(body: Record<string, unknown>, status = 200, headers?: Record<stri
   return Response.json(body, { status, headers });
 }
 
-function origin(request: Request): string {
-  return process.env.SITE_URL?.replace(/\/+$/, "") || new URL(request.url).origin;
-}
-
 function listNames(names: string[]): string {
   const shown = names.slice(0, 3);
   const more = names.length - shown.length;
@@ -219,7 +216,7 @@ export async function handleRegistrationRequest(request: Request, hooks: Registr
       429,
       { "Retry-After": String(hit.retryAfterSeconds) }
     );
-  const siteOrigin = origin(request);
+  const origin = siteOrigin(request.url);
   const defer = hooks.defer ?? ((task: () => Promise<unknown>) => void task().catch(() => {}));
   const runAfter = (label: string, task: () => Promise<unknown> | unknown) =>
     defer(async () => {
@@ -302,7 +299,7 @@ export async function handleRegistrationRequest(request: Request, hooks: Registr
           const names = listNames(result.conflicts.map((c) => c.childName));
           if (result.openRegistrationIds.length > 0) {
             runAfter("Re-sending payment instructions", () =>
-              hooks.onDuplicate?.({ registrationIds: result.openRegistrationIds, origin: siteOrigin })
+              hooks.onDuplicate?.({ registrationIds: result.openRegistrationIds, origin })
             );
           }
           return json(
@@ -329,7 +326,7 @@ export async function handleRegistrationRequest(request: Request, hooks: Registr
       return reply(result);
     }
 
-    runAfter("Registration follow-up", () => hooks.onCreated?.({ registrationId: result.registrationId, origin: siteOrigin }));
+    runAfter("Registration follow-up", () => hooks.onCreated?.({ registrationId: result.registrationId, origin }));
     return reply(result);
   } catch (err) {
     await handBack();

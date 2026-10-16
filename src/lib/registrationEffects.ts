@@ -1,18 +1,17 @@
-import { business } from "./content";
-import { getPayByAt, getRegistrationById } from "./campDb";
+import { getRegistrationSnapshot } from "./campDb";
 import { appendCampRegistration, isGoogleSheetsConfigured } from "./googleSheets";
-import { isEmailConfigured, sendEmail } from "./email";
-import { buildCoachNotificationEmail, buildParentInstructionsEmail } from "./campEmailTemplates";
-import { makeAccessToken } from "./registrationLink";
+import { enqueueInstructionsResend, processOutbox } from "./outbox";
 
 // Server-only. What happens AFTER a reservation has been committed and the parent has their
 // answer. None of it can undo or fail the reservation: the parent already has the payment
-// instructions on screen, and an administrator can see every registration on the dashboard.
+// instructions on screen, and every email they are owed is already recorded in the outbox
+// (in the same transaction as the reservation), so a failure here only delays an email,
+// it never loses one: the scheduled check, or the next visitor, sends what is left.
 
-// Google Sheets is a secondary reporting copy, never the source of truth.
+// Google Sheets is a secondary reporting copy, never the source of truth, and it is not retried.
 async function copyToSheets(registrationId: string): Promise<void> {
   if (!isGoogleSheetsConfigured()) return;
-  const registration = await getRegistrationById(registrationId);
+  const registration = await getRegistrationSnapshot(registrationId);
   if (!registration) return;
   for (const child of registration.children) {
     await appendCampRegistration({
@@ -36,45 +35,27 @@ async function copyToSheets(registrationId: string): Promise<void> {
   }
 }
 
-async function sendInstructions(registrationId: string, origin: string): Promise<void> {
-  const registration = await getRegistrationById(registrationId);
-  if (!registration || !isEmailConfigured()) return;
-  const statusUrl = new URL(`/camp-registration/${makeAccessToken(registration.id)}`, origin).toString();
-  const payByAt = (await getPayByAt(registration.id)) ?? new Date().toISOString();
-  const instructions = buildParentInstructionsEmail(registration, { statusUrl, payByAt });
-  await sendEmail({ to: registration.email, ...instructions });
-}
-
 export async function afterReservationCreated(info: { registrationId: string; origin: string }): Promise<void> {
+  // The parent's email first: it is the one that matters, and Sheets can be slow.
+  try {
+    await processOutbox({ registrationId: info.registrationId, origin: info.origin });
+  } catch (err) {
+    console.error("Sending the new reservation's emails failed (they stay queued and are retried):", err);
+  }
   try {
     await copyToSheets(info.registrationId);
   } catch (err) {
     console.error("Failed to sync camp registration to Google Sheets (non-fatal):", err);
-  }
-  if (!isEmailConfigured()) return;
-  try {
-    await sendInstructions(info.registrationId, info.origin);
-  } catch (err) {
-    console.error("Failed to send the parent's payment instructions (non-fatal):", err);
-  }
-  try {
-    const registration = await getRegistrationById(info.registrationId);
-    if (registration) {
-      const dashboardUrl = new URL("/admin/camp-rosters", info.origin).toString();
-      const { subject, html, text } = buildCoachNotificationEmail(registration, dashboardUrl);
-      await sendEmail({ to: business.email, subject, html, text });
-    }
-  } catch (err) {
-    console.error("Failed to send the coach notification (non-fatal):", err);
   }
 }
 
 export async function afterDuplicateAttempt(info: { registrationIds: string[]; origin: string }): Promise<void> {
   for (const id of info.registrationIds.slice(0, 2)) {
     try {
-      await sendInstructions(id, info.origin);
+      await enqueueInstructionsResend(id);
+      await processOutbox({ registrationId: id, origin: info.origin });
     } catch (err) {
-      console.error("Failed to re-send payment instructions (non-fatal):", err);
+      console.error("Re-sending payment instructions failed (non-fatal):", err);
     }
   }
 }

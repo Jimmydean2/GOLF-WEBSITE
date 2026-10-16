@@ -1,9 +1,10 @@
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
 import { requireAdmin } from "@/lib/adminAuth";
 import { isDatabaseConfigured } from "@/lib/db";
 import { confirmRegistrationPayment } from "@/lib/campDb";
-import { isEmailConfigured, sendEmail } from "@/lib/email";
-import { buildParentConfirmationEmail } from "@/lib/campEmailTemplates";
+import { isEmailConfigured } from "@/lib/email";
+import { processOutbox } from "@/lib/outbox";
+import { siteOrigin } from "@/lib/siteUrl";
 import { juniorCamps } from "@/lib/content";
 import { formatCents } from "@/lib/pricing";
 
@@ -122,17 +123,14 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     }
   }
 
-  let emailSent = false;
-  if (!result.alreadyPaid && isEmailConfigured()) {
-    try {
-      const { subject, html, text } = buildParentConfirmationEmail(result.registration);
-      await sendEmail({ to: result.registration.email, subject, html, text });
-      emailSent = true;
-    } catch (err) {
-      // The payment is already safely recorded: never undo it over an email problem.
-      // The dashboard's "Resend confirmation" button can retry.
-      console.error("Failed to send parent confirmation email:", err);
-    }
+  // The confirmation email was recorded in the same transaction as the payment, so it cannot
+  // be lost. Send it now, after the response; if that fails it stays queued and is retried,
+  // and the dashboard's email box says so.
+  if (!result.alreadyPaid) {
+    const origin = siteOrigin(request.url);
+    after(() =>
+      processOutbox({ registrationId: id, origin }).catch((err) => console.error("Sending the confirmation email failed (it stays queued):", err))
+    );
   }
 
   return NextResponse.json({
@@ -140,6 +138,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     alreadyPaid: result.alreadyPaid,
     reinstatedWeekIds: result.reinstatedWeekIds,
     paidOnTime: result.paidOnTime,
-    emailSent,
+    emailQueued: !result.alreadyPaid,
+    emailConfigured: isEmailConfigured(),
   });
 }

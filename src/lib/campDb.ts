@@ -3,6 +3,7 @@ import type { Pool, PoolClient } from "pg";
 import { capacityViolationWeek, getPool, isUniqueViolation } from "./db";
 import { calculateTotal } from "./pricing";
 import { parseSettings, type CampSettings } from "./campSettings";
+import { enqueueEmail } from "./outboxQueue";
 
 // Server-only. The authoritative store for camp-week capacity and registrations.
 //
@@ -427,6 +428,11 @@ async function reserveOnce(input: ReserveRegistrationInput): Promise<ReserveResu
       }
     }
 
+    // The emails this reservation owes, recorded in the same transaction: if the reservation
+    // exists, so do they; if it was rolled back, neither does.
+    await enqueueEmail(client, "parent_instructions", registrationId);
+    await enqueueEmail(client, "coach_notice", registrationId);
+
     await client.query("COMMIT");
     return {
       ok: true,
@@ -539,6 +545,12 @@ async function loadRegistration(client: Queryable, id: string): Promise<Registra
     weekIds: spotRes.rows.filter((s) => s.held).map((s) => s.week_id as string),
     allWeekIds: spotRes.rows.map((s) => s.week_id as string),
   };
+}
+
+// Reads a registration without the housekeeping getRegistrationById does first. For
+// background work (the email outbox) that is called many times in a row.
+export async function getRegistrationSnapshot(id: string): Promise<RegistrationDetail | null> {
+  return loadRegistration(getPool(), id);
 }
 
 // The time shown to the parent as "pay by": the end of the 12-hour hold, before the short
@@ -705,6 +717,9 @@ export async function releaseExpiredReservations(now?: Date): Promise<{ released
         [id]
       );
       await writeAudit(client, "release_expired", id, { releasedWeekIds }, "system");
+      // The family is told, with the reply-if-you-paid safety net. Recorded with the release,
+      // so it is sent (and retried) whichever page or job happened to do the releasing.
+      await enqueueEmail(client, "parent_release", id);
       return true;
     });
     if (released) releasedRegistrationIds.push(id);
@@ -849,6 +864,9 @@ export async function confirmRegistrationPayment(
           note: note || undefined,
         }
       );
+
+      // The confirmation the family is owed, recorded in the same transaction as the payment.
+      await enqueueEmail(client, "parent_confirmation", registrationId);
 
       const registration = (await loadRegistration(client, registrationId))!;
       return { ok: true, registration, alreadyPaid: false, reinstatedWeekIds, paidOnTime };
