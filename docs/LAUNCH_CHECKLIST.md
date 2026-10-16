@@ -38,7 +38,7 @@ single database connection as in production. `npm test` runs everything (about f
 - **1,793 automated checks** in **27 suites**, all passing in one clean `npm test` run.
 - **99 browser checks** in a real Chromium (phone-sized and desktop): the bilingual parent journey and dashboard (36), the
   roster downloads, manual confirmation and waiting list in both languages (44), plus 19 earlier journey checks.
-- **98 deliberate breakages** (one protection switched off or one line sabotaged at a time; `npm run test:mutations`): **94 were noticed by the tests and 2 are safely covered by a second layer** (the released-family roster filter and one older one). The last 2 (#97, #98: the waiting-list switch and the closed-week rule) were still running when this was written, so they are not counted yet.
+- **98 deliberate breakages** (one protection switched off or one line sabotaged at a time; `npm run test:mutations`): **96 were noticed by the tests and 2 are safely covered by a second layer** (the released-family roster filter, which the roster also drops by registration status, and one older database rule that another layer duplicates).
 
 ### Problems I found and fixed while doing this
 
