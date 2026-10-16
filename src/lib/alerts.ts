@@ -142,11 +142,23 @@ export async function dispatchDueAlerts(opts: {
   const queue = await getPaymentQueue(now);
   const nowMs = new Date(queue.generatedAt).getTime();
 
+  const alreadyAlerted = new Set<string>(
+    (
+      await getPool().query(`SELECT DISTINCT registration_id FROM alert_ledger WHERE registration_id = ANY($1::uuid[])`, [
+        queue.reported.map((i) => i.id),
+      ])
+    ).rows.map((r) => r.registration_id as string)
+  );
+
   // 1. Administrator alerts for reported payments.
   for (const item of queue.reported) {
     if (!item.reviewDueAt) continue;
     const dueMs = new Date(item.reviewDueAt).getTime();
     const planned = planAlerts(item.id, dueMs, nowMs, settings);
+    // The immediate "payment reported" email is sent when the parent taps the button. If the mail
+    // server was unreachable at that moment, the administrators were never told about this payment
+    // at all (no alert of any kind is on record), so the next check tells them.
+    if (planned.length === 0 && !alreadyAlerted.has(item.id)) planned.push({ tier: "reported", key: `reported:${item.id}` });
     const claimed: PlannedAlert[] = [];
     for (const p of planned) {
       if (await claim(p.key, p.tier, item.id, to)) claimed.push(p);

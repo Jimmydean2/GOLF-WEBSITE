@@ -27,10 +27,21 @@ const SUITES = {
   alerts: "db/tests/alerts.test.mjs",
   concurrency: "db/tests/concurrency.test.mjs",
   xlsx: "db/tests/xlsx-safety.test.mjs",
+  families: "db/tests/families.test.mjs",
+  flow: "db/tests/registration-flow.test.mjs",
+  outbox: "db/tests/outbox.test.mjs",
+  scheduler: "db/tests/scheduler.test.mjs",
+  noauto: "db/tests/no-auto-release.test.mjs",
+  pool1: "db/tests/pool-of-one.test.mjs",
+  smtp: "db/tests/smtp-stack.test.mjs",
+  logsafety: "db/tests/log-safety.test.mjs",
 };
 
 const MIGRATION_004 = "db/migrations/004_payment_policy.sql";
 const CAMPDB = "src/lib/campDb.ts";
+const SERVICE = "src/lib/registrationService.ts";
+const OUTBOX = "src/lib/outbox.ts";
+const SCHEDULED = "src/lib/scheduledCheck.ts";
 
 const db = (what, sql, suites, masked) => ({ layer: "database", what, sql, suites, masked });
 const code = (what, patches, suites) => ({ layer: "code", what, patches, suites });
@@ -130,6 +141,42 @@ const MUTATIONS = [
   code("the admin request limit is switched off", [{ file: "src/lib/adminAuth.ts", find: "if (!limit.allowed) {", replace: "if (false as boolean) {" }], ["security"]),
   code("a parent's private link signature is not checked", [{ file: "src/lib/registrationLink.ts", find: "return timingSafeEqual(given, expected) ? id.toLowerCase() : null;", replace: "return id.toLowerCase();" }], ["security"]),
   code("the printed roster stops at 30 rows (children 31-33 would be missing)", [{ file: "src/lib/campRoster.ts", find: "const rowCount = Math.max(MAX_CAMPERS, weekRoster.capacity, weekRoster.rows.length);", replace: "const rowCount = MAX_CAMPERS;" }], ["xlsx"]),
+
+  // --- the production-readiness review: registration path, outbox, scheduler ---
+  code("form mistakes use up the family's hourly allowance (validation after the rate limit)", [{ file: SERVICE, find: "const parsed = validateRegistrationBody(body as Record<string, unknown>, hooks.now);", replace: "await rateLimit(\"register-ip\", clientIp(request), REGISTRATION_LIMITS.newPerIpPerHour, 3600);\n  const parsed = validateRegistrationBody(body as Record<string, unknown>, hooks.now);" }], ["flow"]),
+  code("an attempt that creates nothing keeps its allowance (a family trying for a full week locks itself out)", [{ file: SERVICE, find: "await Promise.allSettled(taken.map((hit) => rateLimitRefund(hit)));", replace: "void taken;" }], ["flow"]),
+  code("a second reservation for the same child and week is allowed", [{ file: CAMPDB, find: "if (overlap.size > 0) {", replace: "if (false as boolean) {" }], ["flow", "families"]),
+  code("a submission key is honoured for any email (another family's link could be returned)", [{ file: CAMPDB, find: `if (emailKey(row.email as string) !== emailKey(email)) return { ok: false, reason: "idempotency_conflict" };`, replace: "" }], ["policy", "flow"]),
+  code("the open-reservation limit is not applied", [{ file: CAMPDB, find: "if ((open.rows[0].n as number) >= settings.openReservationsPerContact) {", replace: "if (false as boolean) {" }], ["families", "policy"]),
+  code("the same child listed twice in one registration is accepted", [{ file: SERVICE, find: "if (seen.has(key)) {", replace: "if (false as boolean) {" }], ["flow"]),
+  code("an oversize request body is accepted", [{ file: SERVICE, find: "if (Number(request.headers.get(\"content-length\") ?? 0) > REGISTRATION_LIMITS.maxBodyBytes) {", replace: "if (false as boolean) {" }], ["flow"]),
+  code("the allowance hand-back does nothing", [{ file: "src/lib/rateLimit.ts", find: "SET hits = GREATEST(hits - 1, 0) WHERE bucket", replace: "SET hits = hits WHERE bucket" }], ["flow"]),
+  code("a repeated submission caught by the database waits for its own connection (pool of one)", [{ file: CAMPDB, find: `    await client.query("ROLLBACK").catch(() => {});
+    release();
+    // Defence in depth`, replace: `    await client.query("ROLLBACK").catch(() => {});
+    // Defence in depth` }], ["pool1"]),
+  code("a dropped idle database connection stops the server (no error handler on the pool)", [{ file: "src/lib/db.ts", find: "pool.on(\"error\", (err) => {", replace: "void ((err: Error) => {" }], ["pool1"]),
+  code("emails are sent without checking the registration still needs them", [{ file: OUTBOX, find: "function skipReason(kind: OutboxKind, reg: RegistrationDetail, now: Date): string | null {", replace: "function skipReason(kind: OutboxKind, reg: RegistrationDetail, now: Date): string | null {\n  if (kind) return null;" }], ["outbox"]),
+  code("a failed send is recorded as sent (the email is lost)", [{ file: OUTBOX, find: "await reschedule([row.id], now, backoffMinutes(row.attempts + 1), note);\n      summary.retried++;", replace: "await finish([row.id], \"sent\", now);\n      summary.retried++;" }], ["outbox", "smtp"]),
+  code("a run keeps hammering a dead mail server (no circuit breaker)", [{ file: OUTBOX, find: "if (consecutiveFailures >= BREAKER_FAILURES) {", replace: "if (false as boolean) {" }], ["outbox", "smtp"]),
+  code("two workers can claim the same email (no row lock when claiming)", [{ file: OUTBOX, find: "LIMIT 1 FOR UPDATE SKIP LOCKED)", replace: "LIMIT 1)" }], ["outbox"]),
+  code("the coach summary can be sent by several workers at once (no slot)", [{ file: OUTBOX, find: "const slot = await claimDigestSlot(now, digestMinutes);\n        if (!slot.claimed) {", replace: "const slot = { claimed: true } as Awaited<ReturnType<typeof claimDigestSlot>>;\n        if (!slot.claimed) {" }], ["outbox"]),
+  code("reminders are also queued for families who already reported payment", [{ file: OUTBOX, find: "WHERE r.status = 'pending_payment' AND r.payment_reported_at IS NULL\n        AND r.hold_ends_at_initial IS NOT NULL", replace: "WHERE r.status IN ('pending_payment', 'payment_reported')\n        AND r.hold_ends_at_initial IS NOT NULL" }], ["outbox"]),
+  code("reminders go out far too early", [{ file: OUTBOX, find: "<= $1::timestamptz\n     ON CONFLICT (dedupe_key) DO NOTHING`,\n    [now.toISOString(), settings.reportAllowanceMinutes, settings.parentReminderHours]", replace: "<= $1::timestamptz + interval '10 hours'\n     ON CONFLICT (dedupe_key) DO NOTHING`,\n    [now.toISOString(), settings.reportAllowanceMinutes, settings.parentReminderHours]" }], ["outbox"]),
+  code("the optional emails are not held back near the daily limit", [{ file: OUTBOX, find: "if (policy.priority > 0 && sentToday >= lowPriorityCutoff) {", replace: "if (false as boolean) {" }], ["outbox"]),
+  code("a rejected (mistyped) address is retried forever", [{ file: "src/lib/email.ts", find: "return { permanent: Boolean(permanent), summary: detail };", replace: "return { permanent: false, summary: detail };" }], ["outbox", "smtp"]),
+  code("releasing an unreported reservation queues no notice for the family", [{ file: CAMPDB, find: `      await enqueueEmail(client, "parent_release", id);\n`, replace: "" }], ["outbox", "alerts"]),
+  code("confirming a payment queues no confirmation email", [{ file: CAMPDB, find: `      await enqueueEmail(client, "parent_confirmation", registrationId);\n`, replace: "" }], ["outbox"]),
+  code("making a reservation queues no payment-instructions email", [{ file: CAMPDB, find: `    await enqueueEmail(client, "parent_instructions", registrationId);\n`, replace: "" }], ["outbox"]),
+  code("several scheduled checks can run at the same moment (no lease)", [{ file: SCHEDULED, find: "if (!(await claimLease())) {", replace: "if (false as boolean) {" }], ["scheduler"]),
+  code("site visits start a scheduled check every time (no throttle)", [{ file: SCHEDULED, find: "if ((recent.rowCount ?? 0) > 0) return null;", replace: "" }], ["scheduler"]),
+  code("a scheduled check that fails is not recorded", [{ file: SCHEDULED, find: "await pool.query(`UPDATE job_runs SET finished_at = now(), ok = false, error = $2, summary = $3 WHERE id = $1`, [runId, message, JSON.stringify(summary)]).catch(() => {});", replace: "" }], ["scheduler"]),
+  code("the scheduled check releases a reported payment as well (the sweep, source-scan and database all object)", [{ file: CAMPDB, find: "WHERE id = $1 AND status = 'pending_payment' AND payment_reported_at IS NULL\n            AND hold_expires_at IS NOT NULL AND hold_expires_at < COALESCE($2::timestamptz, now())\n          FOR UPDATE", replace: "WHERE id = $1 AND status IN ('pending_payment', 'payment_reported')\n          FOR UPDATE" }], ["noauto", "policy"]),
+  code("a 'payment reported' email that failed to send is never retried", [{ file: "src/lib/alerts.ts", find: "if (planned.length === 0 && !alreadyAlerted.has(item.id)) planned.push(", replace: "if (false as boolean) planned.push(" }], ["alerts"]),
+  code("a payment the administrators already heard about is announced again later", [{ file: "src/lib/alerts.ts", find: "if (planned.length === 0 && !alreadyAlerted.has(item.id)) planned.push(", replace: "if (planned.length === 0) planned.push(" }], ["alerts"]),
+  code("with no client address, one shared limit throttles the whole site", [{ file: SERVICE, find: 'const ipKnown = ip !== "unknown";', replace: "const ipKnown = true;" }], ["flow"]),
+  code("weeks are shown in the order of their internal codes (August before June)", [{ file: "src/lib/weeks.ts", find: "export const inCalendarOrder = (ids: string[]): string[] => [...ids].sort(calendarOrder);", replace: "export const inCalendarOrder = (ids: string[]): string[] => [...ids].sort();" }], ["outbox"]),
+  code("an error log includes the database row", [{ file: "src/lib/safeLog.ts", find: "redact(err.message).slice(0, 300),", replace: "redact(err.message + ' ' + String((err as { detail?: string }).detail)).slice(0, 300)," }], ["logsafety"]),
 ];
 
 function applyPatch(workDir, { file, find, replace }) {
@@ -144,6 +191,7 @@ function prepare(m) {
   const work = mkdtempSync(join(tmpdir(), "golf-mutation-"));
   cpSync("src", join(work, "src"), { recursive: true });
   cpSync("db", join(work, "db"), { recursive: true });
+  cpSync("scripts", join(work, "scripts"), { recursive: true });
   for (const f of ["package.json", "tsconfig.json", "next.config.ts", "next-env.d.ts"]) if (existsSync(f)) cpSync(f, join(work, f));
   symlinkSync(resolve("node_modules"), join(work, "node_modules"));
   if (m.sql) {
@@ -168,7 +216,13 @@ function runSuite(work, suite) {
   const crashed = result.status !== 0 && fails.length === 0;
   // The local database running out of connections (other jobs at the same time) or dropping one
   // is not a detection: it says nothing about the protection under test.
-  const infra = result.status !== 0 && /53300|too many clients|remaining connection slots|ECONNREFUSED|ECONNRESET|terminating connection/.test(out);
+  // ("terminating connection" is also what the pool-of-one suite makes the database say ON PURPOSE, and what
+  // the process dies of when the pool's error handler is removed, so it only counts as trouble when
+  // the suite neither reported a failed check nor crashed on an unhandled error.)
+  const infra =
+    result.status !== 0 &&
+    (/53300|too many clients|remaining connection slots|ECONNREFUSED|ECONNRESET/.test(out) ||
+      (fails.length === 0 && /terminating connection/.test(out) && !/Unhandled 'error' event/.test(out)));
   // The first line that names the error (a database message or a stack header), for the summary.
   const lastError = crashed
     ? (out.split("\n").find((l) => /^\s*(error|Error|\w*Error): /.test(l)) ?? out.split("\n").find((l) => /violates|duplicate key/.test(l)) ?? "").trim().slice(0, 160)
@@ -203,12 +257,34 @@ async function dropLeftoverTestDatabases(startedAtMs) {
 }
 
 const verbose = process.argv.includes("--verbose");
-const only = process.argv.slice(2).filter((a) => !a.startsWith("--"));
+const fromArg = process.argv.indexOf("--from");
+const from = fromArg > -1 ? Number(process.argv[fromArg + 1]) : 1;
+const only = process.argv.slice(2).filter((a, i, all) => !a.startsWith("--") && all[i - 1] !== "--from");
+
+// --check-patches: only prove that every sabotage applies cleanly (exactly one match), without running any suite.
+if (process.argv.includes("--check-patches")) {
+  let bad = 0;
+  for (const [i, m] of MUTATIONS.entries()) {
+    const work = mkdtempSync(join(tmpdir(), "golf-mutation-check-"));
+    try {
+      cpSync("src", join(work, "src"), { recursive: true });
+      for (const patch of m.patches ?? []) applyPatch(work, patch);
+    } catch (err) {
+      bad++;
+      console.log(`[${i + 1}] ${m.what}\n    ${err.message}`);
+    } finally {
+      rmSync(work, { recursive: true, force: true });
+    }
+  }
+  console.log(bad === 0 ? `All ${MUTATIONS.length} mutations apply cleanly.` : `${bad} mutation(s) do not apply.`);
+  process.exit(bad === 0 ? 0 : 1);
+}
 const startedAt = Date.now();
 const results = [];
 let index = 0;
 for (const m of MUTATIONS) {
   index++;
+  if (index < from) continue;
   if (only.length && !only.some((o) => m.what.toLowerCase().includes(o.toLowerCase()) || String(index) === o)) continue;
   process.stdout.write(`[${index}/${MUTATIONS.length}] ${m.layer}: ${m.what}\n`);
   const work = prepare(m);

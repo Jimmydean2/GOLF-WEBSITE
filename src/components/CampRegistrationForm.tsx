@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useId, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { business, juniorCamps, locations, type CampWeekId } from "@/lib/content";
 import { calculateTotal, formatCents } from "@/lib/pricing";
@@ -307,10 +307,11 @@ export default function CampRegistrationForm() {
                 />
               </div>
               <div className="mt-4">
-                <label className="mb-1 block text-sm font-medium text-ink">
+                <label htmlFor={`child-${index}-health`} className="mb-1 block text-sm font-medium text-ink">
                   Health &amp; medical information (allergies, medical conditions, medication)
                 </label>
                 <textarea
+                  id={`child-${index}-health`}
                   value={child.healthInfo}
                   onChange={(e) => updateChild(child.key, "healthInfo", e.target.value)}
                   rows={2}
@@ -534,10 +535,15 @@ function ChildField({
   onChange: (value: string) => void;
   type: string;
 }) {
+  // useId is the same on the server and in the browser, which a random value would not be.
+  const id = useId();
   return (
     <div>
-      <label className="mb-1 block text-sm font-medium text-ink">{label}</label>
+      <label htmlFor={id} className="mb-1 block text-sm font-medium text-ink">
+        {label}
+      </label>
       <input
+        id={id}
         value={value}
         onChange={(e) => onChange(e.target.value)}
         type={type}

@@ -14,6 +14,7 @@ const { registrationIdFromToken } = await import("../../src/lib/registrationLink
 const h = createHarness();
 const { pool, campDb, check, resetAll, input, kids, confirmFor, invariants } = h;
 
+const ALL_WEEKS_FLOW = ["jun22", "jun29", "jul06", "jul13", "jul20", "jul27", "aug03", "aug10", "aug17", "aug24"];
 const freshState = async () => {
   await resetAll();
   await pool.query(`DELETE FROM rate_limit_counters`);
@@ -37,7 +38,7 @@ async function post(body, { ip = "198.51.100.7", hooks = {}, raw, headers = {} }
   const calls = { created: [], duplicate: [] };
   const request = new Request("http://localhost:3000/api/camp-registration", {
     method: "POST",
-    headers: { "content-type": "application/json", "x-forwarded-for": ip, ...headers },
+    headers: { "content-type": "application/json", ...(ip ? { "x-forwarded-for": ip } : {}), ...headers },
     body: raw ?? JSON.stringify(body),
   });
   const response = await handleRegistrationRequest(request, {
@@ -299,6 +300,18 @@ console.log("\n=== 8. Follow-up work can never fail or delay the reservation ===
   process.env.REGISTRATION_LINK_SECRET = secret;
   process.env.NODE_ENV = nodeEnv;
   check("without the link secret in production, registration is switched off instead of making unreachable reservations", noSecret.status === 503 && (await registrations()) === 1);
+}
+
+// ---------------------------------------------------------------------------
+console.log("\n=== 8b. A platform that gives no client address must not throttle the whole site ===");
+{
+  await freshState();
+  const statuses = [];
+  for (let i = 0; i < REGISTRATION_LIMITS.newPerIpPerHour + 5; i++) {
+    statuses.push((await post(payload(`noip${i}`, { weeks: [ALL_WEEKS_FLOW[i % 10]], children: kids(1, `NoIp${i}`) }), { ip: null })).status);
+  }
+  check("with no address information, 35 different families are all accepted (they would share the key 'unknown')", statuses.every((s) => s === 200), [...new Set(statuses)].join(","));
+  check("the per-email limit still applies to them", (await hitsFor("register-email")) === REGISTRATION_LIMITS.newPerIpPerHour + 5 && (await hitsFor("register-ip")) === 0);
 }
 
 // ---------------------------------------------------------------------------

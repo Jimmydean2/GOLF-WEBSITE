@@ -87,12 +87,12 @@ try {
 
   // French names: accents and apostrophes must reach the printed roster intact.
   await reserveOk("accents", {
-    weekIds: ["jul06"],
+    weekIds: ["aug17"],
     parentName: "Chantal Côté-Tremblay",
     children: [{ fullName: "Émilie Côté-Bélanger", dateOfBirth: "2016-02-02", age: "10", healthInfo: "allergie aux arachides; EpiPen à l'école" }],
   });
   const wbAccents = await loadWorkbook(outPath);
-  const accentSheet = wbAccents.getWorksheet("Jul 6-9");
+  const accentSheet = wbAccents.getWorksheet("Aug 17-20");
   check("accented French names and health notes appear in the roster exactly as written",
     accentSheet.getRow(8).getCell(2).value === "Émilie Côté-Bélanger" && accentSheet.getRow(8).getCell(9).value === "allergie aux arachides; EpiPen à l'école",
     `${accentSheet.getRow(8).getCell(2).value} / ${accentSheet.getRow(8).getCell(9).value}`);

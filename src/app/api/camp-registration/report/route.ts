@@ -5,6 +5,7 @@ import { notifyPaymentReported } from "@/lib/alerts";
 import { registrationIdFromToken } from "@/lib/registrationLink";
 import { clientIp, rateLimit } from "@/lib/rateLimit";
 import { business } from "@/lib/content";
+import { siteOrigin } from "@/lib/siteUrl";
 import { logError } from "@/lib/safeLog";
 
 // POST /api/camp-registration/report   body: { token }
@@ -86,7 +87,7 @@ export async function POST(request: Request) {
 
   // Tell the administrators (once). After the response, so the parent isn't kept waiting.
   if (!result.alreadyReported) {
-    const dashboardUrl = new URL("/admin/camp-rosters", request.url).toString();
+    const dashboardUrl = `${siteOrigin(request.url)}/admin/camp-rosters`;
     after(() => notifyPaymentReported(registrationId, { dashboardUrl }));
   }
 

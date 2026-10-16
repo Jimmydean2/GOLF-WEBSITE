@@ -415,6 +415,33 @@ console.log("\n=== 11. Alerts stop when the claim is resolved; they never resolv
   check("a claim 100 hours overdue is alerted at the CRITICAL level and is still held", tierOf(m.sent.find((x) => x.subject.includes(refs.keep))) === "critical" && (await reg(keep.id)).status === "payment_reported" && (await reg(keep.id)).spotsActive === 1);
 }
 
+// ---------------------------------------------------------------------------
+console.log("\n=== 12. A 'payment reported' email that could not be sent is sent by the next check ===");
+{
+  await resetAll();
+  await clearLedger();
+  const missed = await reserveOk("missed-report", { weekIds: ["aug17"] });
+  await reportPayment(missed);
+  const mFail = mailer({ failOn: [1] });
+  const first = await notifyPaymentReported(missed, { dashboardUrl: DASH, send: mFail.send, adminEmails: ADMINS });
+  check("the mail server is down at the moment the parent taps the button: the immediate alert fails", first === false && mFail.sent.length === 0);
+  const m = mailer();
+  await dispatch(m, Date.now() + 60_000);
+  check("the next scheduled check tells the administrators (they were never told)", tiers(m.sent) === "reported" && m.sent[0].subject.includes((await reg(missed)).reference_code));
+  await dispatch(m, Date.now() + 120_000);
+  check("and only once", m.sent.length === 1);
+
+  // A payment the administrators already heard about is not announced again later.
+  await confirmFor(missed); // (settle the first one so only the new payment is in play)
+  await clearLedger();
+  const told = await reserveOk("told-already", { weekIds: ["aug10"] });
+  await reportPayment(told);
+  const m2 = mailer();
+  await notifyPaymentReported(told, { dashboardUrl: DASH, send: m2.send, adminEmails: ADMINS });
+  await dispatch(m2, Date.now() + 60_000);
+  check("a payment that was announced immediately is not announced a second time", tiers(m2.sent) === "reported");
+}
+
 await resetAll();
 await pool.end();
 await testDb.drop();

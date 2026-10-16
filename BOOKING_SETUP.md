@@ -167,8 +167,11 @@ this step, the registration form and the live spots-remaining counts on
 the Junior Camps page won't work — everything else on the site (lessons,
 clinics, the rest of the pages) works fine either way.
 
-1. Go to [neon.com](https://neon.com) and sign up (the free tier is
-   plenty for this site's size).
+1. Go to [neon.com](https://neon.com) and sign up. The free tier is big
+   enough for this site's size, but it puts the database to sleep after
+   about 5 idle minutes (the first visit after a quiet spell takes a second
+   or two longer), and how far back you can restore depends on your plan:
+   check that before real registrations arrive.
 2. Click **Create a project**. Give it any name (e.g. `golf-website`).
    For region, pick the one geographically closest to your visitors
    (e.g. a US East region if nothing in Canada is offered) — flag this
@@ -184,9 +187,11 @@ clinics, the rest of the pages) works fine either way.
 Send me that connection string along with the other items below, and
 I'll both add it to the hosting environment and run the one-time setup
 (`npm run db:migrate`) that creates the camp registration tables, the 10
-weeks' worth of seed data, and the database-level capacity and payment
-safety rules (`003_capacity_integrity.sql` and `004_payment_policy.sql`) —
-nothing further for you to do.
+weeks' worth of seed data, the database-level capacity and payment
+safety rules (`003_capacity_integrity.sql` and `004_payment_policy.sql`), and
+the reliable-email queue and scheduled-check log (`005_email_outbox.sql`) —
+nothing further for you to do. (Use a **new, empty** database for the real
+launch: never the one used for the rehearsal in `docs/LAUNCH_REHEARSAL.md`.)
 
 ---
 

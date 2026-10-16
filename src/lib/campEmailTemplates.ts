@@ -459,7 +459,7 @@ export function buildCoachDigestEmail(
   }));
   const html = emailShell(`
     <p style="margin:0 0 12px; font-family:Georgia,'Times New Roman',serif; font-size:20px; font-weight:bold; color:${FOREST};">${total} new Junior Camp registration${total === 1 ? "" : "s"}</p>
-    <p style="margin:0 0 16px; font-size:14px; color:${INK_SOFT}; line-height:1.6;">Each family has been sent its payment instructions and its spots are held for 12 hours. Nothing is confirmed until you see the deposit in your bank account.</p>
+    <p style="margin:0 0 16px; font-size:14px; color:${INK_SOFT}; line-height:1.6;">Each family is sent its payment instructions, and its spots are held for 12 hours. Nothing is confirmed until you see the deposit in your bank account.</p>
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 16px;">
       ${rows
         .map(

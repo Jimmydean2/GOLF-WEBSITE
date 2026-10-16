@@ -13,6 +13,7 @@ import { isValidEmail } from "./validation";
 import { isRegistrationLinkConfigured, makeAccessToken } from "./registrationLink";
 import { clientIp, rateLimit, rateLimitRefund, type RateLimitResult } from "./rateLimit";
 import { siteOrigin } from "./siteUrl";
+import { inCalendarOrder } from "./weeks";
 import { logError } from "./safeLog";
 
 // Server-only. Everything the registration form's POST does, kept apart from the Next.js
@@ -211,6 +212,9 @@ export async function handleRegistrationRequest(request: Request, hooks: Registr
   const input = parsed.value;
 
   const ip = clientIp(request);
+  // If the platform gives no address at all, every visitor would share the key "unknown"; one
+  // limit would then throttle the whole site. The per-email limit still applies.
+  const ipKnown = ip !== "unknown";
   const tooMany = (hit: RateLimitResult) =>
     json(
       { error: "Too many registrations from this connection just now. Please wait a little while, or contact us directly.", code: "rate_limited" },
@@ -244,8 +248,10 @@ export async function handleRegistrationRequest(request: Request, hooks: Registr
 
   try {
     // 4. The flood limit: counted for everything well-formed, never handed back.
-    const flood = await rateLimit("register-flood", ip, REGISTRATION_LIMITS.floodPerIpPerHour, 3600);
-    if (!flood.allowed) return tooMany(flood);
+    if (ipKnown) {
+      const flood = await rateLimit("register-flood", ip, REGISTRATION_LIMITS.floodPerIpPerHour, 3600);
+      if (!flood.allowed) return tooMany(flood);
+    }
 
     // 2. A repeat of a submission that already worked is not a new attempt.
     const replay = await findExistingReservation(input.idempotencyKey, input.email);
@@ -255,13 +261,13 @@ export async function handleRegistrationRequest(request: Request, hooks: Registr
     }
 
     // 3. Counting starts here: this is an attempt to make a new reservation.
-    const perIp = await rateLimit("register-ip", ip, REGISTRATION_LIMITS.newPerIpPerHour, 3600);
-    taken.push(perIp);
+    const perIp = ipKnown ? await rateLimit("register-ip", ip, REGISTRATION_LIMITS.newPerIpPerHour, 3600) : null;
+    if (perIp) taken.push(perIp);
     const perEmail = await rateLimit("register-email", emailKey(input.email), REGISTRATION_LIMITS.newPerEmailPerHour, 3600);
     taken.push(perEmail);
-    if (!perIp.allowed || !perEmail.allowed) {
+    if ((perIp && !perIp.allowed) || !perEmail.allowed) {
       await handBack();
-      return tooMany(perIp.allowed ? perEmail : perIp);
+      return tooMany(perIp && !perIp.allowed ? perIp : perEmail);
     }
 
     const result = await reserveRegistration(input);
@@ -296,7 +302,7 @@ export async function handleRegistrationRequest(request: Request, hooks: Registr
             409
           );
         case "already_registered": {
-          const weeks = [...new Set(result.conflicts.flatMap((c) => c.weekIds))].sort().map(weekLabel);
+          const weeks = inCalendarOrder([...new Set(result.conflicts.flatMap((c) => c.weekIds))]).map(weekLabel);
           const names = listNames(result.conflicts.map((c) => c.childName));
           if (result.openRegistrationIds.length > 0) {
             runAfter("Re-sending payment instructions", () =>

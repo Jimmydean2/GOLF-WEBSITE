@@ -88,6 +88,15 @@ console.log("\n=== 2. Delivery: the right email, to the right people, once ===")
   const coachMail = m.sent.find((x) => x.to === ADMINS.join(", "));
   check("the coach summary goes to every administrator address", Boolean(coachMail) && /new camp registration/i.test(coachMail.subject));
   check("two emails sent, none failed", summary.sent === 2 && summary.failed === 0 && summary.retried === 0, JSON.stringify(summary));
+  // Week ids sort alphabetically into the wrong order for a parent ("aug03" < "jul06" < "jun22").
+  const months = await reserveOk("months", { email: "months@example.test", weekIds: ["aug24", "jul06", "jun22", "aug03"] });
+  const mMonths = mailer();
+  await run(mMonths, { coachMode: "off" });
+  const monthsMail = mMonths.sent.find((x) => x.to === "months@example.test");
+  const positions = ["June 22", "July 6", "August 3", "August 24"].map((label) => monthsMail.text.indexOf(label));
+  check("weeks in three different months are listed in calendar order in the email (June, July, August)", positions.every((p, i) => p >= 0 && (i === 0 || p > positions[i - 1])), positions.join(","));
+  const detail = await campDb.getRegistrationById(months);
+  check("and on the reservation page and everywhere else the registration is read", detail.weekIds.join() === "jun22,jul06,aug03,aug24" && detail.allWeekIds.join() === "jun22,jul06,aug03,aug24", detail.weekIds.join());
   const again = await run(mailer());
   check("running again sends nothing (each email is sent once)", again.sent === 0);
   check("the rows are marked sent with a time", (await rows("registration_id = $1", [id])).every((r) => r.status === "sent" && r.sent_at));

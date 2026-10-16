@@ -4,6 +4,7 @@ import { capacityViolationWeek, getPool, isUniqueViolation } from "./db";
 import { calculateTotal } from "./pricing";
 import { parseSettings, type CampSettings } from "./campSettings";
 import { enqueueEmail } from "./outboxQueue";
+import { inCalendarOrder } from "./weeks";
 import { logError } from "./safeLog";
 
 // Server-only. The authoritative store for camp-week capacity and registrations.
@@ -341,7 +342,7 @@ async function reserveOnce(input: ReserveRegistrationInput): Promise<ReserveResu
         return {
           ok: false,
           reason: "already_registered",
-          conflicts: [...overlap.entries()].map(([childName, weeks]) => ({ childName, weekIds: [...weeks].sort() })),
+          conflicts: [...overlap.entries()].map(([childName, weeks]) => ({ childName, weekIds: inCalendarOrder([...weeks]) })),
           openRegistrationIds: [...openRegistrationIds],
         };
       }
@@ -553,8 +554,8 @@ async function loadRegistration(client: Queryable, id: string): Promise<Registra
       age: c.age,
       healthInfo: c.health_info,
     })),
-    weekIds: spotRes.rows.filter((s) => s.held).map((s) => s.week_id as string),
-    allWeekIds: spotRes.rows.map((s) => s.week_id as string),
+    weekIds: inCalendarOrder(spotRes.rows.filter((s) => s.held).map((s) => s.week_id as string)),
+    allWeekIds: inCalendarOrder(spotRes.rows.map((s) => s.week_id as string)),
   };
 }
 
@@ -1193,7 +1194,7 @@ function toQueueItem(row: Record<string, unknown>, nowMs: number): QueueItem {
     email: row.email as string,
     primaryPhone: row.primary_phone as string,
     childNames: (row.child_names as string[] | null) ?? [],
-    weekIds: (row.week_ids as string[] | null) ?? [],
+    weekIds: inCalendarOrder((row.week_ids as string[] | null) ?? []),
     heldSpots: row.held_spots as number,
     amountDueCents: row.amount_due_cents as number,
     createdAt: new Date(row.created_at as string).toISOString(),
