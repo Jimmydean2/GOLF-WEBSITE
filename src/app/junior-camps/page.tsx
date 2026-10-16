@@ -99,8 +99,8 @@ export default function JuniorCampsPage() {
               Register Your Child
             </h2>
             <p className="mt-3 text-ink-soft">
-              Please fill out the form below to register your child. One
-              registration form is required per child.
+              Please fill out the form below to register your child. Brothers and
+              sisters can be registered together: add each child below.
             </p>
           </div>
 

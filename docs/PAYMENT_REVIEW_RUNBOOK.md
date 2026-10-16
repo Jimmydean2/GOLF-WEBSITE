@@ -19,6 +19,7 @@ email link can change a payment.
 | --- | --- | --- |
 | **Register** | Interac instructions, a unique reference (like `GD-7K4M2Q`), the exact amount (tax included) and a private link | Holds the spots for **12 hours** ("Awaiting Payment") |
 | **Parent sends the e-Transfer** and taps **I've Sent My Payment** | "Thank you — we're checking your payment" (their spot is being held while you verify) | Status becomes **Payment Reported — Awaiting Verification**. The spots are protected while you verify, with a **48-hour** review window. You get an email straight away. |
+| **No report, about 9 hours in** (3 hours before the hold ends) | A short reminder email: "already sent it? tap the button; haven't? here is how" | Sent once, only to families who have not reported or paid |
 | **No report within 12 hours** | An email saying the reservation was released (and what to do if they did pay) | The spots are released automatically (reason: no payment reported in time) |
 | **You see the deposit and click Confirm payment** | A confirmation email with dates, times and what to bring | Status becomes **Paid**, with a record of what you verified |
 
@@ -31,13 +32,17 @@ administrator can release it, confirm it, or extend the review.
 
 ## 2. Your daily routine (2 minutes)
 
-1. Open **/admin/camp-rosters** and log in. The **Payment review** box is at
-   the top. If anything is red, that is the first thing to deal with.
+1. Open **/admin/camp-rosters** and log in. At the top, the **Automatic checks and email**
+   box should be calm: *"Automatic check ran N minutes ago"* and *"No emails waiting"*. If it
+   is red, see section 11. Below it, the **Payment review** box: if anything is red, that is the
+   first thing to deal with.
 2. For each **Payment reported** card (most overdue first), open your **bank
    account** (the bank's own app or website, never a link in an email) and
    look for the deposit. Then use the table below.
-3. Glance at **Awaiting payment**: those are reservations whose parent has not
-   reported yet. They release themselves after 12 hours. Nothing to do.
+3. Open **Awaiting payment** and look in the bank for those references too. *This is the safety
+   net for a family that paid but never tapped "I've Sent My Payment".* If the money is there,
+   click **Confirm payment** right away: the family does not need to tap anything first. The
+   rest release themselves after 12 hours, and each family gets a reminder before that.
 
 ### What to check in the bank before you click Confirm
 
@@ -114,12 +119,12 @@ so an alert is never seen by only one inbox.
 **If email is not connected**, no alerts can be sent. The red banner in the
 review queue is then the only signal, so open the queue every day.
 
-**How often the check runs:** a scheduled job is the reliable way, but a
-frequent schedule needs a paid hosting plan, so it is switched on only with
-James's approval. Until it is set up, alerts are also sent when someone visits
-the site (checked at most every 5 minutes), which means a very quiet weekend can
-delay them. Until the schedule is on, treat the emails as best-effort and **open
-the queue at least once a day**.
+**How often the check runs:** see docs/SCHEDULING.md. In short: until you choose a
+scheduler, the check starts when someone visits the registration form or a parent's page, or
+when you open the dashboard (at most once every 5 minutes), so a quiet night can delay a
+reminder or an alert. The box at the top of the dashboard always says when it last ran, and
+**Run the check now** runs it on demand. Spots are never affected: they are freed on time
+regardless.
 
 ---
 
@@ -155,8 +160,16 @@ new reservations (they still get the normal 12-hour hold and can still pay and
 tell you directly; you can still confirm any deposit you actually see).
 Confirming a real payment from that contact clears their strikes.
 
-A parent can hold at most **8 open reservations** at once; the registration
-form is also rate-limited per address, so one person cannot lock up a week.
+A parent can hold at most **8 open reservations** at once. That counts *submissions*, not
+children or weeks: one submission can include several children and up to all ten weeks.
+(The form is also limited per connection and per email address, but form mistakes and
+retries do not count against it.)
+
+A child can only be reserved once for a given week under the same email address or phone
+number. A parent who registers again because "the email never came" is told they already
+have a reservation, no second one is created, and the payment instructions are sent again
+to the address on file (at most once an hour). If a parent made a mistake and needs it
+changed, release their reservation from the dashboard and let them register again.
 
 ---
 
@@ -179,7 +192,7 @@ Plan ahead for trips longer than a weekend:
 1. **Before you go:** add a second address to `ADMIN_ALERT_EMAILS`. Check that
    the alerts land in the inbox (not spam).
 2. **What happens while you are away:** nothing is released and nothing is
-   marked paid. A claim flagged overdue keeps holding its spots and you (and
+   marked paid. Emails that fail keep being retried. A claim flagged overdue keeps holding its spots and you (and
    your backup) get the emails above. Reservations that nobody reported still
    release themselves after 12 hours.
 3. **Coming back:** open the review queue first. Work from the top (most
@@ -217,3 +230,33 @@ in the Stage 2 report.
   paid"? Handle them (section 5).
 - Make sure no registration has been in *Payment reported* for more than a
   few days. If one has, decide it today.
+- Look at the emails-in-24-hours count in the dashboard box. If it is regularly above 300
+  on a Gmail account, plan for a Workspace account (see section 11).
+
+---
+
+## 11. Email and the automatic check: what the dashboard box means
+
+| What the box says | What it means | What to do |
+| --- | --- | --- |
+| *Automatic check ran N minutes ago* | All good | Nothing |
+| *Triggered by site visits: no scheduled job is set up yet* | It runs only when someone visits | Choose a scheduler (docs/SCHEDULING.md) before launch, or check the box daily |
+| *The automatic check last ran 3 hours ago…* | Nothing has run for a while; reminders, alerts and emails may be late | Press **Run the check now** |
+| *The last automatic check FAILED: …* | Usually the database was briefly unreachable | Press **Run the check now**; if it fails again, tell me |
+| *N emails waiting to be sent* | Gmail refused or was unreachable; each is retried with growing delays | Wait a few minutes, then **Run the check now**. If it persists, see below |
+| *N emails could not be delivered. Call the family* | The mail server said the address does not exist (a typo, usually) | **Phone the family** (their number is shown) and tell them their reference and how to pay; they can also open the reservation page they were shown after registering |
+| *Email is not connected* | Gmail settings missing or wrong | Fix the settings (BOOKING_SETUP.md, Step 4) and press Run the check now; waiting emails are sent then |
+
+**If emails keep stopping:** (1) the Gmail app password may have been revoked (changing the
+Google password can do this): make a new one and update `GMAIL_APP_PASSWORD`; (2) the daily
+limit: a personal Gmail account sends about 500 emails a day (Workspace: about 2,000) and
+refuses more for up to a day. The site holds back reminders and coach summaries as the count
+nears 400, but payment instructions and confirmations always try.
+
+**Bounces you will not see here:** Gmail often *accepts* mail for a mistyped address and then
+sends you a "Delivery Status Notification (Failure)" in the Gmail inbox. Watch for those in the
+first days and phone the family.
+
+**Coach summaries:** you get one summary email an hour (not one per registration), and no health
+details, birth dates or emergency contacts are ever put in an email: they are on the dashboard.
+`COACH_NOTICE_MODE=each` sends one per registration; `off` stops them.

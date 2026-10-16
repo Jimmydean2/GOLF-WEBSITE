@@ -85,6 +85,18 @@ try {
   const cellRegion = cellMatch ? jun22Sheet.slice(jun22Sheet.indexOf(cellTag), jun22Sheet.indexOf(cellTag) + 120) : "";
   check('child-name cell (B8) is explicitly typed t="s" (shared string) in the OOXML', /t="s"/.test(cellTag) && !/<f[ >]/.test(cellRegion));
 
+  // French names: accents and apostrophes must reach the printed roster intact.
+  await reserveOk("accents", {
+    weekIds: ["jul06"],
+    parentName: "Chantal Côté-Tremblay",
+    children: [{ fullName: "Émilie Côté-Bélanger", dateOfBirth: "2016-02-02", age: "10", healthInfo: "allergie aux arachides; EpiPen à l'école" }],
+  });
+  const wbAccents = await loadWorkbook(outPath);
+  const accentSheet = wbAccents.getWorksheet("Jul 6-9");
+  check("accented French names and health notes appear in the roster exactly as written",
+    accentSheet.getRow(8).getCell(2).value === "Émilie Côté-Bélanger" && accentSheet.getRow(8).getCell(9).value === "allergie aux arachides; EpiPen à l'école",
+    `${accentSheet.getRow(8).getCell(2).value} / ${accentSheet.getRow(8).getCell(9).value}`);
+
   // ---------------------------------------------------------------------------
   console.log("\n=== 2. The Paid column, and who is listed ===");
   const mk = (name, extra = {}) => reserveOk(name, { weekIds: ["jun29"], children: [{ fullName: name, dateOfBirth: "2017-01-01", age: "9", healthInfo: "none" }], ...extra });

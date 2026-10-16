@@ -227,8 +227,13 @@ committed to the code), matching the names in `.env.local.example` in this
 repo: `GOOGLE_SERVICE_ACCOUNT_CLIENT_EMAIL`, `GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY`,
 `GOOGLE_CALENDAR_ID`, `GOOGLE_SHEETS_SHEET_ID`, `GMAIL_USER`, `GMAIL_APP_PASSWORD`,
 `ADMIN_PASSWORD`, `DATABASE_URL`, `ETRANSFER_EMAIL`, `ETRANSFER_AUTODEPOSIT`,
-`ADMIN_ALERT_EMAILS`, plus two keys I generate: `REGISTRATION_LINK_SECRET` and
-`CRON_SECRET`.
+`ADMIN_ALERT_EMAILS`, `SITE_URL` (your site's real web address, used for the links in
+emails), plus two keys I generate: `REGISTRATION_LINK_SECRET` and `CRON_SECRET`.
+Optional: `COACH_NOTICE_MODE` (digest, each or off), `EMAIL_DAILY_BUDGET`.
+
+**Before launch:** run `node scripts/preflight.mjs` (it checks every setting, the
+database and the live site), do the rehearsal in `docs/LAUNCH_REHEARSAL.md` with made-up
+families, and work through `docs/LAUNCH_CHECKLIST.md`.
 
 Once those are set:
 - The **Book a Lesson** page shows a real month calendar of your actual open
@@ -275,8 +280,14 @@ Once those are set:
 The code lives on GitHub, but that alone doesn't put it on the internet —
 that takes one more step: connecting this repo to a hosting service. I'd
 recommend **Vercel**, the company that makes Next.js (the framework this
-site is built with) — it's free for a site this size, and deploying from
-GitHub is a few clicks with nothing to configure.
+site is built with); deploying from GitHub is a few clicks with nothing to
+configure. **One cost to know about:** Vercel's free "Hobby" plan is for
+non-commercial, personal use only, and its rules count taking payments or
+advertising a business as commercial use. A business site that takes camp
+registrations belongs on the paid **Pro** plan (about US$20 a month at the time of
+writing; please confirm on vercel.com/pricing). It also lets the automatic
+payment check run every few minutes (docs/SCHEDULING.md). I won't sign you up
+for anything: that is your decision (see docs/LAUNCH_CHECKLIST.md).
 
 1. Go to [vercel.com](https://vercel.com) and sign up using the **same
    GitHub account** this repository lives under (look for "Continue with
