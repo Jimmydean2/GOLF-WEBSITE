@@ -12,6 +12,7 @@ import { formatCents } from "@/lib/pricing";
 import { registrationIdFromToken } from "@/lib/registrationLink";
 import { maybeRunFromTraffic } from "@/lib/scheduledCheck";
 import { maskEmail, siteOriginFromHeaders } from "@/lib/siteUrl";
+import { logError } from "@/lib/safeLog";
 
 // A parent's private reservation page. The link is the credential (there is no account):
 // it is never indexed, never sent as a referrer, and never cached. It can show this one
@@ -35,7 +36,7 @@ export default async function ReservationPage({ params }: { params: Promise<{ to
   // A visit is a chance to run the scheduled check if nothing has run for a few minutes (a
   // fallback for when no scheduler is set up; at most one run every 5 minutes site-wide).
   const origin = siteOriginFromHeaders(await headers());
-  if (origin) after(() => maybeRunFromTraffic(origin).catch((err) => console.error("Scheduled check from a visit failed:", err)));
+  if (origin) after(() => maybeRunFromTraffic(origin).catch((err) => logError("Scheduled check from a visit failed:", err)));
 
   const amountText = `$${formatCents(registration.amountDueCents)}`;
   const childNames = registration.children.map((c) => c.fullName).join(", ");

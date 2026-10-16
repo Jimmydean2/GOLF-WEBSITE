@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/adminAuth";
 import { isDatabaseConfigured } from "@/lib/db";
 import { getAuditLog } from "@/lib/campDb";
+import { logError } from "@/lib/safeLog";
 
 export async function GET(request: Request) {
   const guard = await requireAdmin(request);
@@ -14,7 +15,7 @@ export async function GET(request: Request) {
     const entries = await getAuditLog(200);
     return NextResponse.json({ entries });
   } catch (err) {
-    console.error("Admin audit log read failed:", err);
+    logError("Admin audit log read failed:", err);
     return NextResponse.json({ error: "Could not load the audit log." }, { status: 502 });
   }
 }

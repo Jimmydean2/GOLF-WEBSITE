@@ -5,6 +5,7 @@ import { getPaymentQueue } from "@/lib/campDb";
 import { getEmailHealth } from "@/lib/outbox";
 import { getSchedulerHealth, maybeRunFromTraffic } from "@/lib/scheduledCheck";
 import { siteOrigin } from "@/lib/siteUrl";
+import { logError } from "@/lib/safeLog";
 
 // The administrators' review queue: reported payments (most overdue first), unreported
 // holds, and recent releases, plus whether the automatic check is running and whether emails
@@ -20,11 +21,11 @@ export async function GET(request: Request) {
     const [queue, scheduler, email] = await Promise.all([getPaymentQueue(), getSchedulerHealth(), getEmailHealth()]);
     if (scheduler.status !== "ok") {
       const origin = siteOrigin(request.url);
-      after(() => maybeRunFromTraffic(origin, { source: "manual" }).catch((err) => console.error("Scheduled check from the dashboard failed:", err)));
+      after(() => maybeRunFromTraffic(origin, { source: "manual" }).catch((err) => logError("Scheduled check from the dashboard failed:", err)));
     }
     return NextResponse.json({ ...queue, health: { scheduler, email } }, { headers: { "Cache-Control": "no-store" } });
   } catch (err) {
-    console.error("Payment queue read failed:", err);
+    logError("Payment queue read failed:", err);
     return NextResponse.json({ error: "Could not load the review queue." }, { status: 502 });
   }
 }

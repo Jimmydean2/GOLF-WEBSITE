@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/adminAuth";
 import { isDatabaseConfigured } from "@/lib/db";
 import { searchRegistrations } from "@/lib/campDb";
+import { logError } from "@/lib/safeLog";
 
 // Server-side authorized — the session cookie is re-checked here
 // independently of any admin page, not just hidden behind a client-side
@@ -23,7 +24,7 @@ export async function GET(request: Request) {
     const results = await searchRegistrations(q);
     return NextResponse.json({ results });
   } catch (err) {
-    console.error("Admin registration search failed:", err);
+    logError("Admin registration search failed:", err);
     return NextResponse.json({ error: "Search failed. Please try again." }, { status: 502 });
   }
 }

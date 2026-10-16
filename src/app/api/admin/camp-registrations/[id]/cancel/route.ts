@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/adminAuth";
 import { isDatabaseConfigured } from "@/lib/db";
 import { cancelRegistration } from "@/lib/campDb";
+import { logError } from "@/lib/safeLog";
 
 // POST /api/admin/camp-registrations/[id]/cancel
 // The administrator's Release: frees the spots. With { notReceived: true } it is recorded
@@ -32,7 +33,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     }
     return NextResponse.json({ success: true, releasedWeekIds: result.releasedWeekIds });
   } catch (err) {
-    console.error("Admin release registration failed:", err);
+    logError("Admin release registration failed:", err);
     return NextResponse.json({ error: "Could not release this registration. Please try again." }, { status: 502 });
   }
 }

@@ -13,6 +13,7 @@ import { isValidEmail } from "./validation";
 import { isRegistrationLinkConfigured, makeAccessToken } from "./registrationLink";
 import { clientIp, rateLimit, rateLimitRefund, type RateLimitResult } from "./rateLimit";
 import { siteOrigin } from "./siteUrl";
+import { logError } from "./safeLog";
 
 // Server-only. Everything the registration form's POST does, kept apart from the Next.js
 // route file so it can be exercised directly (and under load) without a web server.
@@ -223,7 +224,7 @@ export async function handleRegistrationRequest(request: Request, hooks: Registr
       try {
         await task();
       } catch (err) {
-        console.error(`${label} failed (non-fatal):`, err);
+        logError(`${label} failed (non-fatal):`, err);
       }
     });
 
@@ -330,7 +331,7 @@ export async function handleRegistrationRequest(request: Request, hooks: Registr
     return reply(result);
   } catch (err) {
     await handBack();
-    console.error("Camp registration failed:", err);
+    logError("Camp registration failed:", err);
     return json(
       { error: "Something went wrong submitting your registration. Please try again or contact us directly.", code: "server_error" },
       502

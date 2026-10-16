@@ -4,6 +4,7 @@ import { capacityViolationWeek, getPool, isUniqueViolation } from "./db";
 import { calculateTotal } from "./pricing";
 import { parseSettings, type CampSettings } from "./campSettings";
 import { enqueueEmail } from "./outboxQueue";
+import { logError } from "./safeLog";
 
 // Server-only. The authoritative store for camp-week capacity and registrations.
 //
@@ -176,7 +177,7 @@ async function releaseExpiredReservationsQuietly(): Promise<void> {
     await releaseExpiredReservations();
   } catch (err) {
     // Never fail a read because the housekeeping failed; the next read retries.
-    console.error("Releasing expired reservations failed:", err);
+    logError("Releasing expired reservations failed:", err);
   }
 }
 

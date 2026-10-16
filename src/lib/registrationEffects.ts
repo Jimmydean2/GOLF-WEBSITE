@@ -1,6 +1,7 @@
 import { getRegistrationSnapshot } from "./campDb";
 import { appendCampRegistration, isGoogleSheetsConfigured } from "./googleSheets";
 import { enqueueInstructionsResend, processOutbox } from "./outbox";
+import { logError } from "./safeLog";
 
 // Server-only. What happens AFTER a reservation has been committed and the parent has their
 // answer. None of it can undo or fail the reservation: the parent already has the payment
@@ -40,12 +41,12 @@ export async function afterReservationCreated(info: { registrationId: string; or
   try {
     await processOutbox({ registrationId: info.registrationId, origin: info.origin });
   } catch (err) {
-    console.error("Sending the new reservation's emails failed (they stay queued and are retried):", err);
+    logError("Sending the new reservation's emails failed (they stay queued and are retried):", err);
   }
   try {
     await copyToSheets(info.registrationId);
   } catch (err) {
-    console.error("Failed to sync camp registration to Google Sheets (non-fatal):", err);
+    logError("Failed to sync camp registration to Google Sheets (non-fatal):", err);
   }
 }
 
@@ -55,7 +56,7 @@ export async function afterDuplicateAttempt(info: { registrationIds: string[]; o
       await enqueueInstructionsResend(id);
       await processOutbox({ registrationId: id, origin: info.origin });
     } catch (err) {
-      console.error("Re-sending payment instructions failed (non-fatal):", err);
+      logError("Re-sending payment instructions failed (non-fatal):", err);
     }
   }
 }

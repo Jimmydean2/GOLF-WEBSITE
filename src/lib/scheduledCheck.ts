@@ -2,6 +2,7 @@ import { getPool } from "./db";
 import { releaseExpiredReservations } from "./campDb";
 import { dispatchDueAlerts, type Mailer } from "./alerts";
 import { enqueueDueReminders, processOutbox } from "./outbox";
+import { logError } from "./safeLog";
 
 // Server-only. The scheduled check: the one thing that has to happen on a clock rather than
 // when someone clicks.
@@ -123,7 +124,7 @@ export async function runScheduledCheck(opts: ScheduledCheckOptions): Promise<Sc
     return summary;
   } catch (err) {
     const message = (err instanceof Error ? err.message : String(err)).slice(0, 300);
-    console.error("Scheduled check failed:", err);
+    logError("Scheduled check failed:", err);
     summary.ok = false;
     summary.error = message;
     summary.durationMs = Date.now() - started;

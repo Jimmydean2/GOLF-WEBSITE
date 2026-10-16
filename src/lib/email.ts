@@ -28,7 +28,14 @@ export function senderAddress(): string | null {
   return process.env.EMAIL_FROM?.trim() || process.env.GMAIL_USER?.trim() || (smtpOverride() ? "camp@localhost" : null);
 }
 
-const TIMEOUTS = { connectionTimeout: 8_000, greetingTimeout: 8_000, socketTimeout: 15_000, dnsTimeout: 5_000 };
+// EMAIL_TIMEOUT_MS shortens every wait (tests and rehearsals); production leaves it unset.
+function timeouts() {
+  const override = Number(process.env.EMAIL_TIMEOUT_MS);
+  if (Number.isFinite(override) && override >= 200) {
+    return { connectionTimeout: override, greetingTimeout: override, socketTimeout: override, dnsTimeout: override };
+  }
+  return { connectionTimeout: 8_000, greetingTimeout: 8_000, socketTimeout: 15_000, dnsTimeout: 5_000 };
+}
 
 function getTransport() {
   const override = smtpOverride();
@@ -41,13 +48,13 @@ function getTransport() {
       // A local test sink speaks plain SMTP; a real server must prove its certificate.
       ignoreTLS: process.env.SMTP_INSECURE === "true",
       auth: user ? { user, pass: process.env.SMTP_PASS ?? "" } : undefined,
-      ...TIMEOUTS,
+      ...timeouts(),
     });
   }
   return nodemailer.createTransport({
     service: "gmail",
     auth: { user: process.env.GMAIL_USER, pass: process.env.GMAIL_APP_PASSWORD },
-    ...TIMEOUTS,
+    ...timeouts(),
   });
 }
 

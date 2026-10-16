@@ -3,6 +3,7 @@ import { requireAdmin } from "@/lib/adminAuth";
 import { isDatabaseConfigured } from "@/lib/db";
 import { reinstateRegistration } from "@/lib/campDb";
 import { juniorCamps } from "@/lib/content";
+import { logError } from "@/lib/safeLog";
 
 const weekLabel = (id: string) => juniorCamps.weeks.find((w) => w.id === id)?.label ?? id;
 
@@ -23,7 +24,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   try {
     result = await reinstateRegistration(id);
   } catch (err) {
-    console.error("Admin reinstate failed:", err);
+    logError("Admin reinstate failed:", err);
     return NextResponse.json({ error: "Could not reinstate this registration. Nothing was changed." }, { status: 502 });
   }
 

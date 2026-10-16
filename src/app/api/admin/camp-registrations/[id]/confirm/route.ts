@@ -7,6 +7,7 @@ import { processOutbox } from "@/lib/outbox";
 import { siteOrigin } from "@/lib/siteUrl";
 import { juniorCamps } from "@/lib/content";
 import { formatCents } from "@/lib/pricing";
+import { logError } from "@/lib/safeLog";
 
 const weekLabel = (id: string) => juniorCamps.weeks.find((w) => w.id === id)?.label ?? id;
 
@@ -66,7 +67,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       note: typeof body.note === "string" ? body.note.slice(0, 500) : undefined,
     });
   } catch (err) {
-    console.error("Admin confirm payment failed:", err);
+    logError("Admin confirm payment failed:", err);
     return NextResponse.json({ error: "Could not confirm this payment. Nothing was changed." }, { status: 502 });
   }
 
@@ -129,7 +130,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   if (!result.alreadyPaid) {
     const origin = siteOrigin(request.url);
     after(() =>
-      processOutbox({ registrationId: id, origin }).catch((err) => console.error("Sending the confirmation email failed (it stays queued):", err))
+      processOutbox({ registrationId: id, origin }).catch((err) => logError("Sending the confirmation email failed (it stays queued):", err))
     );
   }
 

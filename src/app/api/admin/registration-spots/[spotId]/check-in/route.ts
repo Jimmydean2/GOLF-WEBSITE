@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/adminAuth";
 import { isDatabaseConfigured } from "@/lib/db";
 import { markSpotCheckedIn } from "@/lib/campDb";
+import { logError } from "@/lib/safeLog";
 
 export async function POST(request: Request, { params }: { params: Promise<{ spotId: string }> }) {
   const guard = await requireAdmin(request);
@@ -23,7 +24,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ spo
     await markSpotCheckedIn(spotId, checkedIn);
     return NextResponse.json({ success: true });
   } catch (err) {
-    console.error("Admin check-in failed:", err);
+    logError("Admin check-in failed:", err);
     return NextResponse.json({ error: "Could not update check-in status. Please try again." }, { status: 502 });
   }
 }

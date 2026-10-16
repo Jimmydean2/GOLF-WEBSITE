@@ -5,6 +5,7 @@ import { getRegistrationById } from "@/lib/campDb";
 import { isEmailConfigured, sendEmail } from "@/lib/email";
 import { buildCoachNotificationEmail, buildParentConfirmationEmail } from "@/lib/campEmailTemplates";
 import { business } from "@/lib/content";
+import { logError } from "@/lib/safeLog";
 
 // Resends either the parent's paid-confirmation email or the coach's
 // original new-registration notification, by registration id. Which one
@@ -52,7 +53,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
     return NextResponse.json({ success: true });
   } catch (err) {
-    console.error("Admin resend email failed:", err);
+    logError("Admin resend email failed:", err);
     return NextResponse.json({ error: "Could not resend the email. Please try again." }, { status: 502 });
   }
 }

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/adminAuth";
 import { isDatabaseConfigured } from "@/lib/db";
 import { grantReviewExtension } from "@/lib/campDb";
+import { logError } from "@/lib/safeLog";
 
 // POST /api/admin/camp-registrations/[id]/extend
 // A time-limited extension of the verification review, for example when the bank shows the
@@ -41,7 +42,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     }
     return NextResponse.json({ success: true, reviewDueAt: result.reviewDueAt, extensionsLeft: result.extensionsLeft });
   } catch (err) {
-    console.error("Admin extension failed:", err);
+    logError("Admin extension failed:", err);
     return NextResponse.json({ error: "Could not extend the review. Nothing was changed." }, { status: 502 });
   }
 }

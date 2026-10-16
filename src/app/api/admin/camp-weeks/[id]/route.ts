@@ -9,6 +9,7 @@ import {
   setWeekOpen,
   setWeekPrice,
 } from "@/lib/campDb";
+import { logError } from "@/lib/safeLog";
 
 // Admin-only. Lets the operator change a week's capacity, price, or open/closed state
 // without a code change or redeploy. Every change is written to admin_audit_log.
@@ -77,7 +78,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 
     return NextResponse.json({ success: true });
   } catch (err) {
-    console.error("Admin adjust camp week failed:", err);
+    logError("Admin adjust camp week failed:", err);
     return NextResponse.json({ error: "Could not update this week. Please try again." }, { status: 502 });
   }
 }

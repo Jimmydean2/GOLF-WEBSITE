@@ -20,8 +20,12 @@
     "test:scheduler": "tsx db/tests/scheduler.test.mjs",
     "test:no-auto-release": "tsx db/tests/no-auto-release.test.mjs",
     "test:pool-of-one": "tsx db/tests/pool-of-one.test.mjs",
+    "test:log-safety": "tsx db/tests/log-safety.test.mjs",
+    "test:smtp-stack": "tsx db/tests/smtp-stack.test.mjs",
+    "test:http-privacy": "tsx db/tests/http-privacy.test.mjs",
+    "test:opening-day": "tsx db/tests/opening-day.test.mjs",
     "test:mutations": "tsx db/tests/mutation-check.mjs",
-    "test": "npm run test:payment-integrity && npm run test:payment-policy && npm run test:admin-security && npm run test:alerts && npm run test:families && npm run test:registration-flow && npm run test:outbox && npm run test:scheduler && npm run test:no-auto-release && npm run test:pool-of-one && npm run test:concurrency && npm run test:xlsx-safety"
+    "test": "npm run test:log-safety && npm run test:payment-integrity && npm run test:payment-policy && npm run test:admin-security && npm run test:alerts && npm run test:families && npm run test:registration-flow && npm run test:outbox && npm run test:scheduler && npm run test:no-auto-release && npm run test:pool-of-one && npm run test:smtp-stack && npm run test:concurrency && npm run test:xlsx-safety && npm run test:http-privacy && npm run test:opening-day"
   },
   "dependencies": {
     "exceljs": "^4.4.0",

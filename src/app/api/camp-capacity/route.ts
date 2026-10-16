@@ -3,6 +3,7 @@ import { isDatabaseConfigured } from "@/lib/db";
 import { getCampWeeks } from "@/lib/campDb";
 import { maybeRunFromTraffic } from "@/lib/scheduledCheck";
 import { siteOrigin } from "@/lib/siteUrl";
+import { logError } from "@/lib/safeLog";
 
 // Capacity now comes from Postgres (the authoritative store — see
 // src/lib/campDb.ts), not Google Sheets. Price-per-week and open/closed
@@ -19,7 +20,7 @@ export async function GET(request: Request) {
     // runs the scheduled check (at most every 5 minutes, de-duplicated).
     const campWeeks = await getCampWeeks();
     const origin = siteOrigin(request.url);
-    after(() => maybeRunFromTraffic(origin).catch((err) => console.error("Scheduled check from traffic failed:", err)));
+    after(() => maybeRunFromTraffic(origin).catch((err) => logError("Scheduled check from traffic failed:", err)));
 
     const weeks: Record<
       string,
@@ -39,7 +40,7 @@ export async function GET(request: Request) {
 
     return NextResponse.json({ configured: true, weeks });
   } catch (err) {
-    console.error("Failed to read camp capacity:", err);
+    logError("Failed to read camp capacity:", err);
     return NextResponse.json(
       { configured: true, weeks: {}, error: "Could not read capacity right now." },
       { status: 502 }

@@ -5,6 +5,7 @@ import { notifyPaymentReported } from "@/lib/alerts";
 import { registrationIdFromToken } from "@/lib/registrationLink";
 import { clientIp, rateLimit } from "@/lib/rateLimit";
 import { business } from "@/lib/content";
+import { logError } from "@/lib/safeLog";
 
 // POST /api/camp-registration/report   body: { token }
 // The parent's "I've Sent My Payment". The token is their private link: it identifies the
@@ -49,7 +50,7 @@ export async function POST(request: Request) {
   try {
     result = await reportPayment(registrationId);
   } catch (err) {
-    console.error("Payment report failed:", err);
+    logError("Payment report failed:", err);
     return NextResponse.json({ error: "Something went wrong. Please try again." }, { status: 502 });
   }
 

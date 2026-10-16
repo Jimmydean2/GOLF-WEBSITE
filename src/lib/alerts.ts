@@ -9,6 +9,7 @@ import type { CampSettings } from "./campSettings";
 import { business } from "./content";
 import { isEmailConfigured, sendEmail } from "./email";
 import { buildAdminAlertEmail, type AdminAlertSubject, type AdminAlertTier } from "./campEmailTemplates";
+import { logError } from "./safeLog";
 
 // Server-only. The administrators' alerts. (The parents' emails, including the notice that an
 // unreported reservation was released, go through the outbox: see outbox.ts.)
@@ -165,7 +166,7 @@ export async function dispatchDueAlerts(opts: {
       await markSent(lower, "superseded");
       summary.alerts.push({ key: top.key, tier: top.tier, registrationId: item.id });
     } catch (err) {
-      console.error("Sending an administrator alert failed:", err);
+      logError("Sending an administrator alert failed:", err);
       await unclaim(claimed.map((c) => c.key));
       summary.failures++;
     }
@@ -198,7 +199,7 @@ export async function notifyPaymentReported(
     await markSent([key]);
     return true;
   } catch (err) {
-    console.error("Sending the payment-reported alert failed:", err);
+    logError("Sending the payment-reported alert failed:", err);
     await unclaim([key]);
     return false;
   }

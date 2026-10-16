@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/adminAuth";
 import { buildCampRosterWorkbook } from "@/lib/campRoster";
 import { isDatabaseConfigured } from "@/lib/db";
+import { logError } from "@/lib/safeLog";
 
 export async function GET(request: Request) {
   const guard = await requireAdmin(request);
@@ -24,7 +25,7 @@ export async function GET(request: Request) {
       },
     });
   } catch (err) {
-    console.error("Failed to build camp roster workbook:", err);
+    logError("Failed to build camp roster workbook:", err);
     return NextResponse.json(
       { error: "Could not generate the roster right now. Please try again." },
       { status: 502 }

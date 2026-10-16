@@ -173,6 +173,26 @@ const reschedule = (ids: number[], now: Date, afterMinutes: number, failure?: st
     [ids, now.toISOString(), afterMinutes, failure ?? null]
   );
 
+// The coach's summary goes out at most once per interval, however many workers are running at
+// the same moment (on opening day, dozens). The slot is claimed atomically in the database; a
+// worker that does not get it leaves its rows for the next summary.
+const DIGEST_SLOT = "coach_digest_slot";
+
+async function claimDigestSlot(now: Date, intervalMinutes: number): Promise<{ claimed: true } | { claimed: false; opensAt: Date }> {
+  const { rowCount } = await getPool().query(
+    `INSERT INTO camp_settings (key, value) VALUES ($1, $2)
+     ON CONFLICT (key) DO UPDATE SET value = $2, updated_at = now()
+       WHERE camp_settings.value::timestamptz <= $2::timestamptz - make_interval(mins => $3)`,
+    [DIGEST_SLOT, now.toISOString(), intervalMinutes]
+  );
+  if ((rowCount ?? 0) > 0) return { claimed: true };
+  const { rows } = await getPool().query(`SELECT value FROM camp_settings WHERE key = $1`, [DIGEST_SLOT]);
+  const last = rows[0] ? new Date(rows[0].value as string).getTime() : now.getTime();
+  return { claimed: false, opensAt: new Date(last + intervalMinutes * MINUTE) };
+}
+// The summary could not be sent: give the slot back so the next attempt is not held off.
+const releaseDigestSlot = () => getPool().query(`DELETE FROM camp_settings WHERE key = $1`, [DIGEST_SLOT]).catch(() => {});
+
 async function emailsSentLast24h(now: Date): Promise<number> {
   const { rows } = await getPool().query(
     `SELECT (SELECT count(DISTINCT CASE WHEN kind = 'coach_notice' THEN 'c' || sent_at::text ELSE id::text END)
@@ -303,10 +323,9 @@ export async function processOutbox(opts: ProcessOptions = {}): Promise<ProcessS
           continue;
         }
         // Digest: one email for everything waiting, but no more often than the interval.
-        const last = await getPool().query(`SELECT max(sent_at) AS at FROM email_outbox WHERE kind = 'coach_notice' AND status = 'sent'`);
-        const lastAt = last.rows[0].at ? new Date(last.rows[0].at as string).getTime() : null;
-        if (lastAt !== null && now.getTime() - lastAt < digestMinutes * MINUTE) {
-          await reschedule([row.id], now, Math.max(Math.ceil((lastAt + digestMinutes * MINUTE - now.getTime()) / MINUTE), 1));
+        const slot = await claimDigestSlot(now, digestMinutes);
+        if (!slot.claimed) {
+          await reschedule([row.id], now, Math.max(Math.ceil((slot.opensAt.getTime() - now.getTime()) / MINUTE), 1));
           exclude.push(row.id);
           handled--;
           summary.deferred++;
@@ -334,6 +353,7 @@ export async function processOutbox(opts: ProcessOptions = {}): Promise<ProcessS
         }
         if (stale.length > 0) await finish(stale, "skipped", now, "released before the summary went out");
         if (details.length === 0) {
+          await releaseDigestSlot();
           handled--;
           continue;
         }
@@ -342,6 +362,7 @@ export async function processOutbox(opts: ProcessOptions = {}): Promise<ProcessS
           const email = buildCoachDigestEmail(shown, { dashboardUrl: dashboardUrl(), omitted: details.length - shown.length });
           await send({ to: recipients.join(", "), ...email });
         } catch (err) {
+          await releaseDigestSlot();
           await reschedule(ids.filter((id) => id !== row.id), now, 1);
           await recordFailure(row, err);
           continue;

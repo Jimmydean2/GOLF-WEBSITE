@@ -347,6 +347,15 @@ console.log("\n=== 11. The coach hears about new registrations without flooding 
   await run(mLater, { coachMode: "digest", now: new Date(t0.getTime() + 61 * MIN), coachDigestMinutes: 60 });
   check("an hour after the last summary, the next one goes out", mLater.sent.filter((x) => x.to === ADMINS.join(", ")).length === 1);
 
+  // Opening day: dozens of requests each send their own registration's emails at the same moment.
+  await reset();
+  await makeMany(24);
+  const mRace = mailer();
+  await Promise.all(Array.from({ length: 24 }, (_, i) => processOutbox({ origin: ORIGIN, send: mRace.send, adminEmails: ADMINS, coachMode: "digest", registrationId: undefined, limit: 3 + (i % 3) })));
+  const racedDigests = mRace.sent.filter((x) => x.to === ADMINS.join(", "));
+  check("24 workers racing at the same moment still send the coach ONE summary", racedDigests.length === 1, `${racedDigests.length}`);
+  check("and every registration is in it or waiting for the next one (none lost)", (await rows("kind = 'coach_notice' AND status = 'sent'")).length + (await rows("kind = 'coach_notice' AND status = 'pending'")).length === 24);
+
   await reset();
   await makeMany(2);
   const mOff = mailer();
