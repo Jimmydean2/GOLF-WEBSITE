@@ -474,6 +474,37 @@ console.log("\n=== 14. The release notice: the safety net for a family that paid
   check("and nobody was sent the original payment instructions for a spot that no longer exists", m3.sent.every((x) => !/Send your payment to hold/i.test(x.subject)));
 }
 
+// ---------------------------------------------------------------------------
+console.log("\n=== 15. Opening day: dozens of requests send at once, but only a few emails are in flight ===");
+{
+  await reset();
+  const weeks = ["jun22", "jun29", "jul06", "jul13", "jul20", "jul27", "aug03", "aug10", "aug17", "aug24"];
+  const ids = [];
+  for (let i = 0; i < 40; i++) ids.push(await reserveOk(`wave${i}`, { email: `wave${i}@example.test`, weekIds: [weeks[i % 10]] }));
+  let inFlight = 0;
+  let maxInFlight = 0;
+  const delivered = new Set();
+  const slow = async (message) => {
+    inFlight++;
+    maxInFlight = Math.max(maxInFlight, inFlight);
+    await new Promise((r) => setTimeout(r, 60));
+    inFlight--;
+    delivered.add(message.to);
+  };
+  const t0 = Date.now();
+  await Promise.all(ids.map((id) => processOutbox({ origin: ORIGIN, send: slow, adminEmails: ADMINS, coachMode: "off", registrationId: id, maxConcurrent: 5 })));
+  check("40 workers starting in the same instant never have more than 5 emails in flight", maxInFlight <= 5, `peak ${maxInFlight}`);
+  check("and every family's email still went out (the workers waited their turn)", delivered.size === 40, `${delivered.size} delivered in ${Date.now() - t0}ms`);
+  check("nothing was left waiting or failed", (await rows("kind = 'parent_instructions' AND status <> 'sent'")).length === 0);
+
+  // When the slots stay full, a worker gives up politely and leaves its email for the next run.
+  await reset();
+  const lone = await reserveOk("lone", { email: "lone@example.test", weekIds: ["jul06"] });
+  await pool.query(`UPDATE email_outbox SET status = 'sending', lease_until = now() + interval '1 minute' WHERE kind = 'coach_notice'`);
+  const full = await processOutbox({ origin: ORIGIN, send: mailer().send, adminEmails: ADMINS, coachMode: "off", registrationId: lone, maxConcurrent: 1, timeBudgetMs: 1500 });
+  check("with every slot busy it sends nothing yet and says why, leaving the email queued", full.sent === 0 && /most emails allowed at once/.test(full.stoppedEarly ?? "") && (await rowFor("parent_instructions", lone)).status === "pending");
+}
+
 await invariants("outbox");
 await resetAll();
 await pool.end();

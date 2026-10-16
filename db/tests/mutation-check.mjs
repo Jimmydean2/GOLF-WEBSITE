@@ -176,6 +176,8 @@ const MUTATIONS = [
   code("a payment the administrators already heard about is announced again later", [{ file: "src/lib/alerts.ts", find: "if (planned.length === 0 && !alreadyAlerted.has(item.id)) planned.push(", replace: "if (planned.length === 0) planned.push(" }], ["alerts"]),
   code("with no client address, one shared limit throttles the whole site", [{ file: SERVICE, find: 'const ipKnown = ip !== "unknown";', replace: "const ipKnown = true;" }], ["flow"]),
   code("weeks are shown in the order of their internal codes (August before June)", [{ file: "src/lib/weeks.ts", find: "export const inCalendarOrder = (ids: string[]): string[] => [...ids].sort(calendarOrder);", replace: "export const inCalendarOrder = (ids: string[]): string[] => [...ids].sort();" }], ["outbox"]),
+  code("any number of emails can be in flight at once (no cluster-wide cap)", [{ file: OUTBOX, find: "if ((active.rows[0].n as number) >= cap) {", replace: "if (false as boolean) {" }], ["outbox"]),
+  code("phone numbers are not checked (a family with no usable number to call)", [{ file: SERVICE, find: "if (badPhone(primaryPhone, true) || badPhone(emergencyPhone, true) || badPhone(secondaryPhone, false)) {", replace: "if (false as boolean) {" }], ["flow"]),
   code("an error log includes the database row", [{ file: "src/lib/safeLog.ts", find: "redact(err.message).slice(0, 300),", replace: "redact(err.message + ' ' + String((err as { detail?: string }).detail)).slice(0, 300)," }], ["logsafety"]),
 ];
 

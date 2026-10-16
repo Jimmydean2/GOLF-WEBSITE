@@ -39,12 +39,19 @@ const POLICY: Record<OutboxKind, { priority: 0 | 1 | 2; giveUpAfterHours: number
 };
 
 const MINUTE = 60_000;
-const LEASE_MINUTES = 5;
+const LEASE_MINUTES = 2;
 const MAX_BACKOFF_MINUTES = 30;
 // After this many failures in a row (not counting a recipient the mail server rejects), a run
 // stops trying: the mail server is not answering, and every further attempt would only wait.
 const BREAKER_FAILURES = 3;
 const DIGEST_MAX_ROWS = 25;
+// How many emails may be in flight at once across ALL servers. Gmail refuses an account that opens
+// dozens of simultaneous connections, and on opening day every registration starts its own send.
+const SLOT_WAIT_MS = 8_000;
+export function maxConcurrentSends(): number {
+  const n = Number(process.env.EMAIL_MAX_CONCURRENT);
+  return Number.isInteger(n) && n >= 1 && n <= 50 ? n : 8;
+}
 
 // Mail servers like to repeat the recipient's address in their errors; keep it out of logs and summaries.
 const redactAddresses = (text: string) => text.replace(/[^\s<>@,;]+@[^\s<>,;]+/g, "<address>");
@@ -124,6 +131,7 @@ export type ProcessOptions = {
   coachMode?: "digest" | "each" | "off";
   coachDigestMinutes?: number;
   dailyBudget?: number;
+  maxConcurrent?: number;
 };
 
 type OutboxRow = {
@@ -137,23 +145,48 @@ type OutboxRow = {
 
 const PRIORITY_SQL = `CASE kind WHEN 'parent_instructions' THEN 0 WHEN 'parent_confirmation' THEN 0 WHEN 'parent_release' THEN 0 WHEN 'parent_reminder' THEN 1 ELSE 2 END`;
 
-async function claimNext(now: Date, registrationId: string | undefined, exclude: number[]): Promise<OutboxRow | null> {
-  const { rows } = await getPool().query(
-    `UPDATE email_outbox SET status = 'sending', lease_until = $1::timestamptz + make_interval(mins => $2)
-      WHERE id = (
-        SELECT id FROM email_outbox
-         WHERE ((status = 'pending' AND next_attempt_at <= $1::timestamptz + interval '5 milliseconds')
-             OR (status = 'sending' AND lease_until < $1::timestamptz))
-           AND ($3::uuid IS NULL OR registration_id = $3::uuid)
-           AND id <> ALL($4::bigint[])
-         ORDER BY ${PRIORITY_SQL}, next_attempt_at, id
-         LIMIT 1 FOR UPDATE SKIP LOCKED)
-      RETURNING id, dedupe_key, kind, registration_id, attempts, created_at`,
-    [now.toISOString(), LEASE_MINUTES, registrationId ?? null, exclude]
-  );
-  // (The few milliseconds of tolerance cover the database stamping a row a fraction of a
-  // millisecond after the millisecond-rounded time this process read from its own clock.)
-  return (rows[0] as OutboxRow | undefined) ?? null;
+type Claim = { row: OutboxRow | null; full: boolean };
+
+// Takes the next due email, unless the cluster is already sending as many as it may. The count and
+// the claim happen under one short database lock, so a burst of workers starting in the same
+// instant still cannot exceed the limit.
+async function claimNext(now: Date, registrationId: string | undefined, exclude: number[], cap: number): Promise<Claim> {
+  const client = await getPool().connect();
+  try {
+    await client.query("BEGIN");
+    await client.query(`SELECT pg_advisory_xact_lock(hashtext('email_outbox_claim'))`);
+    const active = await client.query(
+      `SELECT count(DISTINCT CASE WHEN kind = 'coach_notice' THEN 'digest' ELSE id::text END)::int AS n
+         FROM email_outbox WHERE status = 'sending' AND lease_until > $1::timestamptz`,
+      [now.toISOString()]
+    );
+    if ((active.rows[0].n as number) >= cap) {
+      await client.query("ROLLBACK");
+      return { row: null, full: true };
+    }
+    const { rows } = await client.query(
+      `UPDATE email_outbox SET status = 'sending', lease_until = $1::timestamptz + make_interval(mins => $2)
+        WHERE id = (
+          SELECT id FROM email_outbox
+           WHERE ((status = 'pending' AND next_attempt_at <= $1::timestamptz + interval '5 milliseconds')
+               OR (status = 'sending' AND lease_until < $1::timestamptz))
+             AND ($3::uuid IS NULL OR registration_id = $3::uuid)
+             AND id <> ALL($4::bigint[])
+           ORDER BY ${PRIORITY_SQL}, next_attempt_at, id
+           LIMIT 1 FOR UPDATE SKIP LOCKED)
+        RETURNING id, dedupe_key, kind, registration_id, attempts, created_at`,
+      [now.toISOString(), LEASE_MINUTES, registrationId ?? null, exclude]
+    );
+    await client.query("COMMIT");
+    // (The few milliseconds of tolerance cover the database stamping a row a fraction of a
+    // millisecond after the millisecond-rounded time this process read from its own clock.)
+    return { row: (rows[0] as OutboxRow | undefined) ?? null, full: false };
+  } catch (err) {
+    await client.query("ROLLBACK").catch(() => {});
+    throw err;
+  } finally {
+    client.release();
+  }
 }
 
 const finish = (ids: number[], status: "sent" | "skipped" | "failed", now: Date, note?: string) =>
@@ -245,6 +278,7 @@ export async function processOutbox(opts: ProcessOptions = {}): Promise<ProcessS
   const budget = opts.dailyBudget ?? dailyEmailBudget();
   const lowPriorityCutoff = Math.floor(budget * 0.8);
   const recipients = opts.adminEmails ?? adminAlertRecipients();
+  const cap = opts.maxConcurrent ?? maxConcurrentSends();
 
   let sentToday = await emailsSentLast24h(now);
   let handled = 0;
@@ -278,7 +312,17 @@ export async function processOutbox(opts: ProcessOptions = {}): Promise<ProcessS
       summary.stoppedEarly = "the mail server is not accepting messages";
       break;
     }
-    const row = await claimNext(now, opts.registrationId, exclude);
+    let claim = await claimNext(now, opts.registrationId, exclude, cap);
+    const waitUntil = Math.min(deadline, Date.now() + SLOT_WAIT_MS);
+    while (claim.full && Date.now() < waitUntil) {
+      await new Promise((r) => setTimeout(r, 150 + Math.random() * 200));
+      claim = await claimNext(now, opts.registrationId, exclude, cap);
+    }
+    if (claim.full) {
+      summary.stoppedEarly = "other servers are already sending the most emails allowed at once; the rest go out in the next run";
+      break;
+    }
+    const row = claim.row;
     if (!row) break;
     const policy = POLICY[row.kind];
 

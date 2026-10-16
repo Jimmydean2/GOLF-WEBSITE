@@ -15,15 +15,18 @@ services can prove it · ⬜ not built.
 *"Verified" means an automated test exercises it against a real PostgreSQL database, the real
 production build of the site, and a recording mail server, with the site running on a single
 database connection as it will in production. Run everything with `npm test` (about six
-minutes). Counts below are checks in each suite.*
+minutes). Counts below are checks in each suite. In total: **1,197 automated checks** (17 suites),
+**19 browser checks** (a real Chromium on a phone-sized and a desktop screen, against both the
+development and the production build), and **63 deliberate breakages** (one protection switched
+off at a time) of which 62 were noticed by the tests and 1 is safely covered by another layer.*
 
 **Your eight priorities**
 
 | # | You asked | Answer | Evidence |
 | --- | --- | --- | --- |
-| 1 | Will parents with several children and weeks be wrongly blocked by the 8-reservation limit? | **No.** The limit counts *submissions*, not children or weeks: four children for all ten weeks is **one** reservation. I did find a real way to block a genuine family, **and fixed it**: form mistakes and retries used up the hourly allowance (five typos, or a few double-clicks, locked a family out). Now only an actual new reservation counts, and an attempt that creates nothing is handed back. | `families` (26), `registration-flow` (81) |
-| 2 | Paid but forgot to click: the simplest safeguard? | **Three layers, none adds a step for parents.** (a) One **reminder email** about 3 hours before the hold ends ("already sent it? tap the button"), only to families who have not reported. (b) If it still lapses, the **release email says "reply with your reference if you paid"** and you can **Reinstate & confirm** with the deposit. (c) A **daily glance at the bank for the "Awaiting payment" references**: if the money is there, click Confirm; no parent action needed. | `outbox` (93), `scheduler` (49), `opening-day` (56); runbook §2, §5 |
-| 3 | Is a reported payment ever released just because I did not check the bank? | **Never.** Proved three ways: (a) the database refuses it; (b) a source scan fails if *any* code outside the administrator's Release can release a reservation, and shows the automatic release can only touch unreported ones; (c) ten simulated days with 20 reported payments, every automatic entry point run repeatedly, plus 40 race tests at the moment a hold ends: nothing reported was released, you were alerted louder each day, and on return all 20 could be confirmed. | `no-auto-release` (32), `alerts` (106), `payment-policy` (175), `payment-integrity` (183) |
+| 1 | Will parents with several children and weeks be wrongly blocked by the 8-reservation limit? | **No.** The limit counts *submissions*, not children or weeks: four children for all ten weeks is **one** reservation. I did find a real way to block a genuine family, **and fixed it**: form mistakes and retries used up the hourly allowance (five typos, or a few double-clicks, locked a family out). Now only an actual new reservation counts, and an attempt that creates nothing is handed back. | `families` (26), `registration-flow` (88) |
+| 2 | Paid but forgot to click: the simplest safeguard? | **Three layers, none adds a step for parents.** (a) One **reminder email** about 3 hours before the hold ends ("already sent it? tap the button"), only to families who have not reported. (b) If it still lapses, the **release email says "reply with your reference if you paid"** and you can **Reinstate & confirm** with the deposit. (c) A **daily glance at the bank for the "Awaiting payment" references**: if the money is there, click Confirm; no parent action needed. | `outbox` (99), `scheduler` (49), `opening-day` (56); runbook §2, §5 |
+| 3 | Is a reported payment ever released just because I did not check the bank? | **Never.** Proved three ways: (a) the database refuses it; (b) a source scan fails if *any* code outside the administrator's Release can release a reservation, and shows the automatic release can only touch unreported ones; (c) ten simulated days with 20 reported payments, every automatic entry point run repeatedly, plus 40 race tests at the moment a hold ends: nothing reported was released, you were alerted louder each day, and on return all 20 could be confirmed. | `no-auto-release` (32), `alerts` (110), `payment-policy` (175), `payment-integrity` (183) |
 | 4 | A dependable scheduled process, without activating paid services | **Built and tested, not switched on.** One check releases unreported holds, queues reminders, sends your alerts and retries failed emails. It runs from a secret-protected URL, falls back to site visits, can't overlap itself, leaves a record, and the dashboard shows when it last ran (red if it stops). Options and costs are in `docs/SCHEDULING.md`. | `scheduler` (49), `no-auto-release` |
 | 5 | Real-world end-to-end testing for Gmail, Neon, bank matching, confirmation emails | **The kit is built and tested; the rehearsal itself needs your accounts** (§2). Preflight check, fake-family tool, $1-week and fast-clock database scripts (each refuses to run on a database holding real registrations), a recording mail server, and a step-by-step guide. | `rehearsal-kit` (31), `smtp-stack` (30), `docs/LAUNCH_REHEARSAL.md` |
 | 6 | French readiness | **Audited; nothing is translated** (§3, §4). About 340 pieces of text (~2,500 words) plus formats. French accents already work end to end. | `docs/FRENCH_READINESS.md`, `scripts/i18n-audit.mjs` |
@@ -36,8 +39,11 @@ minutes). Counts below are checks in each suite.*
 - Dozens of requests at the same moment could each send you a coach summary (now one per hour, atomically).
 - A "reservation released" notice was only sent to the 100 most recent releases (a mass lapse could skip families) and retried a mistyped address forever; it now goes through the same retrying queue as every other email.
 - Database connections had no timeouts and no handler for a connection Neon drops; the database's certificate was not being checked (now verified).
-- Registration answers were slower and fragile because emails were sent *inside* the request; they now go out after the answer, from a queue that cannot lose an email.
+- Registration answers were slower and fragile because emails were sent *inside* the request; they now go out after the answer, from a queue that cannot lose an email, and the queue paces itself (at most 8 emails in flight at once across the whole site) so a burst cannot trip Gmail's limit on simultaneous connections.
 - The child fields on the form were not linked to their labels for screen readers, and the camp page still said "one form per child".
+- Phone numbers were not checked at all (a family could register with "n/a"); they now need an area code.
+- A "payment reported" email that failed to send was never retried; the next check now sends it, once.
+- If the hosting platform ever gave no client address, one shared limit would have throttled the whole site; the per-connection limits are skipped in that case.
 - Weeks were listed by their internal code, so a family with weeks in different months saw August before June in emails, the reservation page and your alerts; they are now in calendar order.
 - The setup guide said the free Vercel plan was fine; it is for non-commercial use only (§4).
 
@@ -56,6 +62,7 @@ These can only be proved on your real accounts. `docs/LAUNCH_REHEARSAL.md` is th
 - 🟡 **Google Sheets / Calendar** copies (no credentials here). The Sheets copy adds one row per child per registration; Google limits writes per minute, so on a busy opening minute some rows may be missed. It is a convenience copy, not the record.
 - 🟡 **Real-network load**: tests ran on one machine. Real latency, Neon's connection limits on a small compute (about 100) and Vercel's concurrency are not exercised.
 - 🟡 **Screen readers / full accessibility review.**
+- ℹ️ **Known and accepted:** `npm audit` lists 2 moderate advisories, both in `uuid` inside the roster-spreadsheet library, about a feature that library does not use here; the only automatic "fix" is a downgrade of the library, so I left it.
 
 ---
 

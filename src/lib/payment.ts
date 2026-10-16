@@ -11,7 +11,7 @@ export function etransferAddress(): string {
 
 // Only claim automatic deposit once the bank has confirmed it (ETRANSFER_AUTODEPOSIT=true).
 // Until then parents are told to get in touch if their bank asks for a security question.
-export function etransferInstructionLines(reference: string, amountText: string): string[] {
+export function etransferInstructionLines(reference: string, amountText: string, surface: "page" | "email" = "page"): string[] {
   const autodeposit = process.env.ETRANSFER_AUTODEPOSIT === "true";
   return [
     `Send an Interac e-Transfer of ${amountText} to ${etransferAddress()}.`,
@@ -19,7 +19,9 @@ export function etransferInstructionLines(reference: string, amountText: string)
     autodeposit
       ? "This address accepts transfers automatically, so there is no password or security question."
       : `If your bank asks for a security question and answer, please call ${business.phone} and we'll sort it out.`,
-    "Then come back to this page and tap “I’ve Sent My Payment.” You don’t need to upload anything or create an account.",
+    surface === "email"
+      ? "Then open your reservation page (the button below) and tap “I’ve Sent My Payment.” You don’t need to upload anything or create an account."
+      : "Then come back to this page and tap “I’ve Sent My Payment.” You don’t need to upload anything or create an account.",
   ];
 }
 

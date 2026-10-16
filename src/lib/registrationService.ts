@@ -111,6 +111,14 @@ export function validateRegistrationBody(body: Record<string, unknown>, now: Dat
   }
   if (!isValidEmail(email)) return fail("invalid_email", "Please enter a valid email address.");
 
+  // The owner phones families, and the same phone number links a family's reservations: a number
+  // with no area code, or with letters in it, helps nobody.
+  const phoneDigits = (value: string) => value.replace(/\D/g, "").length;
+  const badPhone = (value: string, required: boolean) => (required || value !== "") && (phoneDigits(value) < 10 || phoneDigits(value) > 15 || /[A-Za-z]/.test(value));
+  if (badPhone(primaryPhone, true) || badPhone(emergencyPhone, true) || badPhone(secondaryPhone, false)) {
+    return fail("invalid_phone", "Please enter each phone number with its area code, for example 514-555-0100.");
+  }
+
   if (body.codeOfConductAccepted !== true || body.consentAccepted !== true) {
     return fail("consent_required", "Please accept the code of conduct and information consent to continue.");
   }

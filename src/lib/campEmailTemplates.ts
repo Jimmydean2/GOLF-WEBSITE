@@ -273,7 +273,7 @@ export function buildParentInstructionsEmail(
   opts: { statusUrl: string; payByAt: string }
 ): { subject: string; html: string; text: string } {
   const amount = `$${formatCents(registration.amountDueCents)}`;
-  const lines = etransferInstructionLines(registration.reference, amount);
+  const lines = etransferInstructionLines(registration.reference, amount, "email");
   const childNames = registration.children.map((c) => c.fullName).join(", ");
   const weeks = registration.weekIds.map(weekLabel);
   const subject = `Send your payment to hold ${childNames}'s camp spot (${registration.reference})`;

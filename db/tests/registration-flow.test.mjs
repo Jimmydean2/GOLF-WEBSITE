@@ -261,6 +261,10 @@ console.log("\n=== 7. Bad requests are turned away cleanly ===");
     "13 children": { ...good, children: kids(13, "Many") },
     "the same child listed twice": { ...good, children: [good.children[0], { ...good.children[0], fullName: good.children[0].fullName.toUpperCase() }] },
     "a 10,000-character health note": { ...good, children: [{ ...good.children[0], healthInfo: "x".repeat(10_000) }] },
+    "a phone number with no area code": { ...good, primaryPhone: "555-0100" },
+    "a phone number with words in it": { ...good, primaryPhone: "call me on 514-555-0100 after 5" },
+    "an emergency number that is too short": { ...good, emergencyPhone: "911" },
+    "a secondary number that is not a number": { ...good, secondaryPhone: "n/a" },
     "a non-string email": { ...good, email: { a: 1 } },
     "consent given as the string 'true'": { ...good, consentAccepted: "true" },
   };
@@ -269,6 +273,8 @@ console.log("\n=== 7. Bad requests are turned away cleanly ===");
     check(`${label}: a 400 with a plain message`, r.status === 400 && typeof r.data.error === "string" && typeof r.data.code === "string", `${r.status} ${r.data.code}`);
   }
   check("none of that created a reservation or used any allowance", (await registrations()) === 0 && (await hitsFor("register")) === 0);
+  const odd = await post(payload("phones", { email: "phones@example.test", primaryPhone: "+33 1 23 45 67 89", secondaryPhone: "(514) 555-0100", weeks: ["jul13"], children: kids(1, "Ph") }), { ip });
+  check("international and punctuated phone numbers are accepted", odd.status === 200, `${odd.status} ${odd.data.error ?? ""}`);
   const twelve = await post(payload("twelve", { email: "twelve@example.test", children: kids(12, "Tw"), weeks: ["jul06"] }), { ip });
   check("exactly 12 children in one registration is accepted", twelve.status === 200, `${twelve.status} ${twelve.data.error ?? ""}`);
 }
