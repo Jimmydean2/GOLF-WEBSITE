@@ -7,6 +7,12 @@
 > approve the rules; **B1** (55 versus 50 + 10) is replaced by a configurable 60-minute slot; **G1** (a one-time import)
 > is replaced by "no import, audit first, reconcile by hand"; the build is on the separate branch
 > `claude/lessons-clinics-booking`. See `docs/LESSONS_AND_CLINICS_DECISIONS.md` for what is still open.
+>
+> **Revision 2 (2026-10-17):** you then decided that **private lessons are booked without paying in advance** and paid at the lesson
+> (cash or Interac e-Transfer). So everything in this review about **holds, expiry, "I've sent my payment", late payment and Interac verification
+> now applies to group clinics and the camp only, not to private lessons** (sections 3.4, parts of 3.3 and 3.6, race rows 7 and 8, risks 3 and 4).
+> The current lesson design is in `docs/LESSONS_AND_CLINICS_DESIGN.md` (sections 7B and 9) and what remains before lessons can accept real
+> bookings is in `docs/LESSONS_GO_LIVE_READINESS.md`.
 
 **Status: a proposal for your decision. Nothing in this document has been built.** No code was changed, nothing was
 merged or deployed, no payment was activated and no paid service was added. This is separate from the camp and from the

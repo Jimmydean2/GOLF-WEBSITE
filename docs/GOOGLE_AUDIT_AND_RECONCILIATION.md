@@ -110,6 +110,8 @@ You approve the tool, the account it runs under and the output before it runs; I
 
 ## 4. The reconciliation plan (human decisions; nothing automatic)
 
+*(Revision 2, 2026-10-17: private lessons are now booked without prepayment and paid at the lesson, so a hand-entered legacy lesson is simply a confirmed lesson that you close out afterwards with Paid - Cash, Paid - Interac or Unpaid. Clinic sign-ups keep advance payment.)*
+
 Principle: **Google remains the record of what Google already holds. The new system only blocks around it, and takes new
 bookings from the day it opens. Anything you want moved across, you enter yourself through the dashboard, where every
 rule applies.**
@@ -119,7 +121,7 @@ rule applies.**
 | Legacy item | Recommended handling | The new system's behaviour meanwhile |
 | --- | --- | --- |
 | **Past lessons and clinics** | Nothing is imported. Decide retention (I propose the same 90 days after the last session; keep what your accountant needs) and delete the rest from the calendar and Sheet | Not involved |
-| **Future single lesson** | Leave it in Google (it already blocks the time), or enter it by hand as a **manual booking** tagged *legacy* (to get a reminder and a place on your Today list) | The time is unavailable because the busy calendar shows it |
+| **Future single lesson** | Leave it in Google (it already blocks the time), or enter it by hand as a **manual booking** tagged *legacy* (a confirmed lesson, paid at the lesson like any other, so it gets a reminder, a place on your Today list and a place in your close-out routine; it starts as Unpaid unless you already know it was paid) | The time is unavailable because the busy calendar shows it |
 | **Future weekly (recurring) lessons** | Highest risk. Leave the Google series in place until it ends, or enter each by hand. The new system **never edits or deletes** them | Every week of the series blocks time through the busy calendar |
 | **Clinic sign-ups (Sheet)** for a series that has not started | Enter each participant by hand as a clinic **manual booking** (tagged legacy, paid or not according to your knowledge). Their spots then count against the 10 in the database | Clinic capacity counts them from the moment you enter them; **until entered, they are not in the database**, so the offering must not be published until they are (a pre-publish checklist item) |
 | **A clinic or lesson that conflicts with another** | The manual entry is refused by the same overlap or capacity rule, and you are shown what it conflicts with, so legacy double-bookings surface instead of hiding | Nothing is changed |
