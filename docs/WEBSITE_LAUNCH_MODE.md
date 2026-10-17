@@ -77,6 +77,12 @@ informational launch: no database, no mail account, no Google service account.
 Result on the launch branch: **24 checks, 0 failures.** A browser run of the same build (phone and
 desktop, English and French) found no broken link or empty form on the pages above.
 
+### Checking a real hosting preview
+
+`LAUNCH_MODE_URL=https://the-preview-address npm run test:launch-mode` runs the same checks 1 to 4 against any running
+site (a Netlify or Cloudflare preview, say) instead of building one here. Which host to use, with the tests behind the
+recommendation, is in `docs/HOSTING_OPTIONS.md`.
+
 ## 5. Going from here to a real launch, one feature at a time
 
 The informational launch changes nothing about the later steps. Each booking feature opens separately,

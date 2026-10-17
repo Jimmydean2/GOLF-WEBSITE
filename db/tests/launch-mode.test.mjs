@@ -9,6 +9,12 @@
 //   * nothing connects to a database, Google or a mail server.
 // A scratch copy is used because the camp pages are built ahead of time from the environment, so
 // building them "unconfigured" in the real project folder would break the other suites.
+//
+// To check a real hosting preview instead (a Netlify or Cloudflare preview URL, a local emulation), set
+// LAUNCH_MODE_URL=https://the-preview.example npm run test:launch-mode : nothing is built or started,
+// the same checks 1 to 4 run against that address, and check 5 (the server's own log) is skipped. The
+// address must be a site built with no booking settings; the checks send a few harmless POSTs that the
+// site refuses, and nothing else.
 
 import { cpSync, existsSync, mkdtempSync, realpathSync, rmSync } from "node:fs";
 import { spawn, spawnSync } from "node:child_process";
@@ -24,9 +30,13 @@ const check = (label, ok, detail = "") => {
   console.log(`  [${ok ? "PASS" : "FAIL"}] ${label}${detail ? ` — ${detail}` : ""}`);
 };
 
-const work = mkdtempSync(join(tmpdir(), "golf-launch-mode-"));
+const external = (process.env.LAUNCH_MODE_URL ?? "").replace(/\/+$/, "");
+const work = external ? null : mkdtempSync(join(tmpdir(), "golf-launch-mode-"));
 let server = null;
+let url = external;
+const logs = [];
 try {
+  if (!external) {
   for (const f of ["src", "public", "assets", "package.json", "tsconfig.json", "next.config.ts", "next-env.d.ts", "postcss.config.mjs"]) {
     if (existsSync(f)) cpSync(f, join(work, f), { recursive: true });
   }
@@ -46,11 +56,10 @@ try {
       s.close(() => resolve(port));
     });
   });
-  const logs = [];
   server = spawn("node", ["node_modules/next/dist/bin/next", "start", "-p", String(port), "-H", "127.0.0.1"], { cwd: work, env: bare, stdio: ["ignore", "pipe", "pipe"] });
   server.stdout.on("data", (d) => logs.push(String(d)));
   server.stderr.on("data", (d) => logs.push(String(d)));
-  const url = `http://127.0.0.1:${port}`;
+  url = `http://127.0.0.1:${port}`;
   for (let i = 0; i < 120; i++) {
     try {
       if ((await fetch(`${url}/`)).status < 500) break;
@@ -58,6 +67,9 @@ try {
       /* not up yet */
     }
     await new Promise((r) => setTimeout(r, 250));
+  }
+  } else {
+    console.log(`(checking an existing site at ${external}; nothing is built or started here)`);
   }
 
   const get = (path, init) => fetch(`${url}${path}`, { redirect: "manual", ...init });
@@ -103,15 +115,19 @@ try {
   check("the health address reveals nothing about a site that is not set up", health.status === 503 || health.status === 200);
 
   console.log("\n=== 5. It touched nothing outside itself ===");
-  const all = logs.join("");
-  check("no database, Google or mail connection was attempted (the log is clean of errors)", !/ECONNREFUSED|ENOTFOUND|googleapis|SMTP|connect ETIMEDOUT/i.test(all), all.slice(-300));
+  if (external) {
+    console.log("  (skipped: the server's own log is not available for an existing site)");
+  } else {
+    const all = logs.join("");
+    check("no database, Google or mail connection was attempted (the log is clean of errors)", !/ECONNREFUSED|ENOTFOUND|googleapis|SMTP|connect ETIMEDOUT/i.test(all), all.slice(-300));
+  }
 } finally {
   if (server) {
     server.kill("SIGTERM");
     await new Promise((r) => setTimeout(r, 500));
     server.kill("SIGKILL");
   }
-  rmSync(work, { recursive: true, force: true });
+  if (work) rmSync(work, { recursive: true, force: true });
 }
 
 console.log(failures === 0 ? `\nALL TESTS PASS (${checks} pass, 0 fail) — launch-mode` : `\n${failures} OF ${checks} CHECK(S) FAILED — launch-mode`);

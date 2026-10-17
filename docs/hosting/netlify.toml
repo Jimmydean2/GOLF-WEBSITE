@@ -1,0 +1,15 @@
+# PROPOSED, NOT ACTIVE. This is exactly what was tested (docs/HOSTING_OPTIONS.md). It sits in docs/hosting/
+# so that nothing changes until the owner approves hosting on Netlify; then copy it to the project root
+# as netlify.toml. Netlify installs the Next.js runtime plugin by itself; naming it here only pins the
+# intent. No environment variables are needed for the informational launch: leave the booking settings
+# (DATABASE_URL, ADMIN_PASSWORD, Google, mail, SEASON_PREVIEW ...) unset (docs/WEBSITE_LAUNCH_MODE.md).
+
+[build]
+  command = "npm run build"
+  publish = ".next"
+
+[build.environment]
+  NODE_VERSION = "22"
+
+[[plugins]]
+  package = "@netlify/plugin-nextjs"
